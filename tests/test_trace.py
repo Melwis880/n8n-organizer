@@ -50,6 +50,23 @@ class TraceTests(TempDirTest):
         run(self.input, self.output, tracer=tracer)
         self.assertEqual(stream.getvalue().splitlines(), tracer.path.read_text().splitlines())
 
+    def test_each_event_is_on_disk_as_soon_as_it_is_written(self):
+        tracer = Tracer(self.tmp / "logs")
+        tracer.event("found", path="a.json")
+        self.assertEqual(self.events(tracer)[0]["path"], "a.json")
+        tracer.close()
+
+    def test_file_is_closed_after_a_run_and_reopened_by_the_next(self):
+        write_json(self.input / "a.json", DATA_WF)
+        tracer = Tracer(self.tmp / "logs")
+        run(self.input, self.output, tracer=tracer)
+        self.assertIsNone(tracer._file)
+        run(self.input, self.tmp / "output2", tracer=tracer)
+        self.assertIsNone(tracer._file)
+        events = self.events(tracer)
+        self.assertEqual([e["event"] for e in events].count("run_end"), 2)
+        self.assertEqual([e["seq"] for e in events], list(range(1, len(events) + 1)))
+
     @unittest.skipIf(hasattr(os, "geteuid") and os.geteuid() == 0, "root ignores permissions")
     def test_unwritable_log_dir_warns_once_and_run_continues(self):
         blocked = self.tmp / "blocked"

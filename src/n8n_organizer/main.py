@@ -69,6 +69,13 @@ def run(
     max_file_bytes: int = MAX_FILE_BYTES,
 ) -> RunResult:
     tracer = tracer or Tracer(None)
+    try:
+        return _run(input_dir, output_dir, tracer, max_words, max_file_bytes)
+    finally:
+        tracer.close()
+
+
+def _run(input_dir: Path, output_dir: Path, tracer: Tracer, max_words: int, max_file_bytes: int) -> RunResult:
     check_locations(input_dir, output_dir)
     # Folder names only: the trace never holds a local absolute path.
     tracer.event("run_start", input=input_dir.resolve().name, output=output_dir.resolve().name)

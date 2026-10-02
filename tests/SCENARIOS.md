@@ -22,12 +22,12 @@ input is synthetic and built in temporary folders by `tests/helpers.py`.
 | 15 | Output folder equal to input, inside input, or not empty; missing input | Refused with a clear message, exit code 2, nothing written | `test_cli.LocationTests` |
 | 16 | Word limit passed | A second numbered file is opened; no workflow is lost | `test_pipeline.ChunkTests` |
 | 17 | `source_file` in output | Relative to the input root, no local absolute path | `test_pipeline.NormalRunTests.test_source_file_relative` |
-| 18 | Trace | Each file has the expected event chain; no workflow content in the trace; `--debug` mirrors to stderr; unwritable log folder warns once and the run continues | `test_trace` |
+| 18 | Trace | Each file has the expected event chain; no workflow content in the trace; `--debug` mirrors to stderr; unwritable log folder warns once and the run continues; each event is on disk as soon as it is written; the file is opened once per run and closed at its end | `test_trace` |
 | 19 | `search` command | Clear "not built yet" error, exit code 2 | `test_cli.CliTests.test_search_is_a_clear_stub` |
 | 20 | Connections | Edges are counted across all output types (`main`, `ai_*`) | `test_classifier.ConnectionTests` |
 | 21 | File system lists folders and files in a non-sorted order | Files are still processed in sorted path order | `test_loader.OrderTests` |
 | 22 | Two categories tie | The earlier category in the fixed order wins, confidence `low` | `test_classifier.TieTests` |
-| 23 | Untrusted text helper | Control, bidi, zero-width and lone surrogate characters become spaces; whitespace collapses; long text is cut with `...` | `test_utils.CleanTextTests` |
+| 23 | Untrusted text helper | Control, bidi, zero-width, line/paragraph separator and lone surrogate characters become spaces (ASCII-only text too); printable text is kept; whitespace collapses; long text is cut with `...` | `test_utils.CleanTextTests` |
 | 24 | Workflow with an LLM step (any LangChain node or OpenAI node) among many data nodes | Primary is AI_Content by rule, confidence `high`, reason names the node type; secondary comes from scores | `test_classifier.LlmRuleTests` |
 | 25 | Workflow with no scoring signal | Data_Integration by default, confidence `none`, reason says so | `test_classifier.CategoryTests.test_no_signal_falls_back_to_first_category_with_confidence_none` |
 | 26 | Messaging channel nodes (Slack, Telegram, Twitter, LinkedIn) | No AI_Content score; they count as services | `test_classifier.ScoringRuleTests.test_messaging_channels_give_no_ai_score` |
@@ -48,3 +48,5 @@ input is synthetic and built in temporary folders by `tests/helpers.py`.
 | 41 | Workflow or node name that is not a string; node type with spaces, a URL or a header | None of it reaches the output or the trace; such a type counts as no type | `test_pipeline.LeakTests.test_non_string_names_and_odd_types_never_reach_output`, `test_classifier.ServiceListTests.test_type_that_is_not_a_type_name_gives_no_service` |
 | 42 | Every category file | Opens with a note that names are untrusted data, not instructions; `workflow_id` and `dedup_fingerprint` are SHA-256 | `test_pipeline.NormalRunTests.test_files_start_with_the_untrusted_note_and_hashes_are_sha256` |
 | 43 | Records kept in memory during a run | Only node names and types, never parameters or credentials | `test_pipeline.LeakTests.test_records_keep_only_node_names_and_types` |
+| 44 | Valid workflow with parameters nested 600 levels deep | Analysed, not an error; normalizing never changes the workflow it reads | `test_pipeline.DeepNestingTests` |
+| 45 | Metadata block, built key by key from a cache | Byte-identical to one `yaml.safe_dump` of the whole metadata, for hard names (newlines, fences, HTML, emoji, YAML-like words, empty) and on cache hits | `test_pipeline.YamlBlockTests` |

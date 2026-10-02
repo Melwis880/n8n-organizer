@@ -34,7 +34,9 @@ def get_word_count(text: str) -> int:
 def clean_text(value: Any, max_len: int = 200) -> str:
     """Make untrusted text safe for one Markdown line: no control, format or bidi characters, no newlines."""
     text = value if isinstance(value, str) else ("" if value is None else str(value))
-    text = "".join(" " if unicodedata.category(ch) in UNSAFE_CATEGORIES else ch for ch in text)
+    # isprintable() is False for every Cc, Cf, Cs, Zl and Zp character, so True means nothing to replace.
+    if not text.isprintable():
+        text = "".join(" " if unicodedata.category(ch) in UNSAFE_CATEGORIES else ch for ch in text)
     text = " ".join(text.split())
     if len(text) > max_len:
         text = text[: max_len - 3].rstrip() + "..."

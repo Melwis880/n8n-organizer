@@ -2,6 +2,7 @@ import json
 import os
 import re
 import unittest
+from dataclasses import asdict
 from pathlib import Path
 from unittest import mock
 
@@ -9,6 +10,8 @@ import yaml
 
 from n8n_organizer import loader, main
 from n8n_organizer.main import UsageError, build_record, run
+from n8n_organizer.markdown_writer import YAML_OPTIONS, _yaml_block
+from n8n_organizer.normalizer import normalize_workflow
 from n8n_organizer.trace import Tracer
 
 from helpers import AI_WF, DATA_WF, ORCH_WF, TempDirTest, node, workflow, write_json
@@ -338,6 +341,41 @@ class ChunkTests(TempDirTest):
         self.assertEqual(result.output_files[:2], ["1-Data_Integration.md", "2-Data_Integration.md"])
         names = [fm["workflow_name"] for fm in front_matters(self.output_text())]
         self.assertEqual(sorted(names), [f"Report {i}" for i in range(4)])
+
+
+class DeepNestingTests(TempDirTest):
+    def test_deeply_nested_parameters_are_analysed_not_an_error(self):
+        # 600 levels: json.loads accepts it; a deep copy of it raised RecursionError.
+        deep = "[" * 600 + "]" * 600
+        text = '{"name": "Deep", "nodes": [{"name": "Set", "type": "n8n-nodes-base.set", "parameters": ' + deep + "}]}"
+        (self.input / "deep.json").write_text(text, encoding="utf-8")
+        result = run(self.input, self.output)
+        self.assertEqual((result.analysed, result.errors), (1, []))
+        self.assertIn("# Workflow: Deep", self.output_text())
+
+    def test_normalizing_does_not_change_the_workflow(self):
+        wf = workflow(" My Flow ", [node(" Fetch ", "n8n-nodes-base.httpRequest", credentials={"x": {"id": "1"}},
+                                         parameters={"a": [{"b": 1}]}, webhookId="w")])
+        before = json.dumps(wf, sort_keys=True)
+        normalized = normalize_workflow(wf)
+        self.assertEqual(json.dumps(wf, sort_keys=True), before)
+        self.assertEqual(normalized["name"], "My Flow")
+        self.assertEqual(normalized["nodes"], [{"name": "fetch", "type": "n8n-nodes-base.httpRequest", "parameters": {"a": [{"b": 1}]}}])
+
+
+class YamlBlockTests(TempDirTest):
+    NAMES = [
+        UntrustedTextTests.NASTY, *MarkdownInjectionTests.NAMES, "📄🛠️PDF2Blog", "null", "123", "yes",
+        "- item", "key: value", "'quoted'", "x" * 90 + " ```", "",
+    ]
+
+    def test_block_is_the_same_as_one_dump_of_the_whole_metadata(self):
+        workflows = [AI_WF, DATA_WF, ORCH_WF, workflow("Empty", [])]
+        workflows += [workflow(n, [node(n, "n8n-nodes-base.telegramTrigger"), node("Mail", "n8n-nodes-base.gmail")]) for n in self.NAMES]
+        for _ in range(2):  # the second pass is served from the cache
+            for i, wf in enumerate(workflows):
+                meta = asdict(build_record(Path(f"wf{i}.json"), f"f/wf{i}.json", wf).metadata)
+                self.assertEqual(_yaml_block(meta), yaml.safe_dump(meta, **YAML_OPTIONS).strip(), wf["name"])
 
 
 if __name__ == "__main__":

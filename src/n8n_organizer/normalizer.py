@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from copy import deepcopy
 from typing import Any
 
 # Fields that change between exports of the same workflow; ignored when looking for duplicates.
@@ -25,12 +24,14 @@ def _normalize_node(node: dict[str, Any]) -> dict[str, Any]:
 
 
 def normalize_workflow(data: dict[str, Any]) -> dict[str, Any]:
-    cloned = deepcopy(data)
-    connections = cloned.get("connections")
-    name = cloned.get("name")
+    # No deep copy: data is only read. Nodes are rebuilt by _normalize_node; parameters and
+    # connections are shared with data and nothing changes them. A deep copy doubled peak memory
+    # and failed on deeply nested parameters (RecursionError) that json.loads accepts.
+    connections = data.get("connections")
+    name = data.get("name")
 
     normalized_nodes = sorted(
-        (_normalize_node(node) for node in cloned.get("nodes", [])),
+        (_normalize_node(node) for node in data.get("nodes", [])),
         key=lambda x: (str(x.get("type", "")), str(x.get("name", ""))),
     )
     return {

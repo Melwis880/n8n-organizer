@@ -22,7 +22,7 @@ into a notebook tool one by one. This tool groups them, removes duplicates, and 
 uniform profile of each workflow: its nodes, services, metrics and the reasons for its category.
 
 On the [Zie619/n8n-workflows](https://github.com/Zie619/n8n-workflows) collection it reads
-2,057 files and writes 1,973 unique workflow profiles in about 10 seconds. See
+2,057 files and writes 1,973 unique workflow profiles in about 7 seconds. See
 [CASE_STUDY.md](CASE_STUDY.md).
 
 ## Install

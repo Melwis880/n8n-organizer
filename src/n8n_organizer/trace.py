@@ -17,6 +17,7 @@ class Tracer:
         self.debug = debug
         self.stream = stream if stream is not None else sys.stderr
         self.path: Path | None = None
+        self._file: TextIO | None = None
         self._warned = False
         if log_dir is not None:
             now = datetime.now(timezone.utc)
@@ -35,12 +36,20 @@ class Tracer:
         line = json.dumps(record, ensure_ascii=True, sort_keys=False)
         if self.path is not None:
             try:
-                self.path.parent.mkdir(parents=True, exist_ok=True)
-                with self.path.open("a", encoding="utf-8") as f:
-                    f.write(line + "\n")
+                if self._file is None:
+                    self.path.parent.mkdir(parents=True, exist_ok=True)
+                    # Opened once per run, line buffered: every event is on disk as soon as it is written.
+                    self._file = self.path.open("a", encoding="utf-8", buffering=1)
+                self._file.write(line + "\n")
             except OSError as exc:
                 if not self._warned:
                     print(f"n8n-organizer: warning: cannot write trace ({exc.strerror}); continuing", file=self.stream)
                     self._warned = True
         if self.debug:
             print(line, file=self.stream)
+
+    def close(self) -> None:
+        """Close the trace file; a later event opens it again."""
+        if self._file is not None:
+            self._file.close()
+            self._file = None

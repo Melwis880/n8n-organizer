@@ -21,6 +21,12 @@ class CleanTextTests(unittest.TestCase):
     def test_lone_surrogates_removed(self):
         self.assertEqual(clean_text("a\udcffb"), "a b")
 
+    def test_every_unsafe_category_is_replaced_and_printable_text_is_kept(self):
+        # Cc, Cf (zero width, bidi), Zl, Zp, Cs: each is non-printable, so the fast path never skips one.
+        self.assertEqual(clean_text("a\x07b​c‮d e f\ud800g"), "a b c d e f g")
+        self.assertEqual(clean_text("a\x07b\x7fc"), "a b c")  # all ASCII: no shortcut for ASCII text
+        self.assertEqual(clean_text("Café 📄 Ünal: Q&A > 1000"), "Café 📄 Ünal: Q&A > 1000")
+
     def test_non_strings(self):
         self.assertEqual(clean_text(None), "")
         self.assertEqual(clean_text(42), "42")

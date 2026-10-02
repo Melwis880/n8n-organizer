@@ -58,7 +58,7 @@ anything.
 | Duplicates removed | 74 (all exact copies with a different number in the same folder) |
 | Skipped as "not a workflow" | 10 (`package.json`, `tsconfig.json`, API listings) |
 | Errors | 0 |
-| Run time | about 10 seconds |
+| Run time | about 7 seconds |
 | Output | 3 files, 741,917 words; each under the 450,000-word NotebookLM limit |
 
 | Category | Workflows |
@@ -130,9 +130,9 @@ found these bugs in it:
   All 97 workflows with a vector store already had an LLM step, so no category, secondary
   category or confidence changed; only scores and reason lines did.
 
-The test suite has 80 tests over 43 written scenarios (tests/SCENARIOS.md), all on synthetic
-fixtures. To check that the tests catch real faults, 80 deliberate bugs were planted in the
-code one at a time: 74 were caught. The exercise also found five missing tests (added) and two
+The test suite has 86 tests over 45 written scenarios (tests/SCENARIOS.md), all on synthetic
+fixtures. To check that the tests catch real faults, 93 deliberate bugs were planted in the
+code one at a time: 84 were caught. The exercise also found six missing tests (added) and three
 pieces of dead code (removed).
 
 A security review before publishing found that untrusted input could stop or bend a run: a
@@ -140,6 +140,11 @@ file name with bytes that are not UTF-8 stopped the whole run, a FIFO made it wa
 unreadable file put the absolute local path into `summary.txt`, and names could add links,
 images or HTML to the Markdown. All are fixed and tested; on the full collection no category,
 confidence, tag or service changed.
+
+A performance review then removed a deep copy of every workflow, which doubled peak memory on
+large files and turned valid but deeply nested workflows into errors, and made the metadata
+writing reuse repeated values. The full run went from about 10 to about 7 seconds with
+byte-identical output.
 
 ## Takeaways
 

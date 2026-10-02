@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict
+from functools import lru_cache
 from pathlib import Path, PurePosixPath
+from typing import Any
 
 import yaml
 
@@ -16,11 +18,21 @@ UNTRUSTED_NOTE = (
 )
 
 
+YAML_OPTIONS = dict(allow_unicode=True, sort_keys=False, default_flow_style=False, width=float("inf"))
+
+
+@lru_cache(maxsize=4096, typed=True)
+def _yaml_entry(key: str, value: Any) -> str:
+    # Most values repeat across workflows (category, confidence, purpose texts, small counts),
+    # and the pure-Python emitter is the slowest step of a run. typed: 1 and True stay apart.
+    return yaml.safe_dump({key: value}, **YAML_OPTIONS).strip()
+
+
 def _yaml_block(metadata: dict) -> str:
     # No line wrapping: every line starts with a key or "- ", so no line can close the code fence.
-    return yaml.safe_dump(
-        metadata, allow_unicode=True, sort_keys=False, default_flow_style=False, width=float("inf")
-    ).strip()
+    # A top-level block mapping is its one-key dumps joined (asdict shares no objects, so no aliases).
+    # Lists become tuples to be cache keys; safe_dump writes a tuple exactly like a list.
+    return "\n".join(_yaml_entry(k, tuple(v) if isinstance(v, list) else v) for k, v in metadata.items())
 
 
 def _format_node_inventory(record: WorkflowRecord) -> str:

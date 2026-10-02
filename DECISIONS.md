@@ -10,6 +10,7 @@ Her satır: karar - neden. Bir karar değişecekse önce Meriç'e sorulur, sessi
 ## Teknoloji
 - Python >= 3.10, paket düzeni `src/n8n_organizer/` + `pyproject.toml`, komut `n8n-organizer` ve `python -m n8n_organizer` - flx ile aynı düzen, `pip install -e .` ile kurulur.
 - Tek bağımlılık PyYAML, sürüm sabit (`PyYAML==6.0.3`); sadece `yaml.safe_dump` kullanılır - workflow adları gibi güvenilmeyen metni doğru kaçırır; elle YAML yazmak kaçış hatalarına açık (Meriç kararı, 2026-10-02). Başka bağımlılık eklenmez.
+- Metadata bloğu anahtar başına `yaml.safe_dump` ile yazılır, sonuç `(anahtar, değer)` üzerinden önbelleğe alınır (`lru_cache(maxsize=4096)`); blok, tüm sözlüğün tek `safe_dump`'ıyla bayt bayt aynı (senaryo 45). Çalıştırmanın en yavaş adımı saf Python YAML yazımıydı (3,5 -> 1,5 sn). libyaml (`CSafeDumper`) kullanılmaz: 8 kat hızlı ama BMP dışı karakterleri (emoji) `\U0001F4C4` diye kaçırıyor, gerçek veride 56 workflow'un metadatası değişirdi (OPTIMIZATIONS.md bulgu 2; Meriç "evet", 2026-10-03).
 - Test: standart `unittest`, ağ yok, uydurma workflow JSON'ları `tests/fixtures/` altında.
 - CLI: `argparse` alt komutları: `build` (mevcut hat), `search` (yer tutucu, `NotImplementedError`) - arama indeksi ileride gelecek (Meriç kararı, 2026-10-02).
 
@@ -48,6 +49,7 @@ Her satır: karar - neden. Bir karar değişecekse önce Meriç'e sorulur, sessi
 - Dosya ya da klasör adında UTF-8 olmayan bayt, satır sonu, NEL ya da kontrol/biçim karakteri varsa dosya `unsafe_file_name` diye atlanır - böyle tek bir ad yazma aşamasında tüm çalıştırmayı düşürüyor, `summary.txt`'ye sahte satır yazdırabiliyordu (security.md bulgu 1, 5, 10; Meriç "evet", 2026-10-03).
 - 10 MB'tan büyük JSON atlanır (trace'e neden yazılır) - bozuk ya da kötü niyetli dev dosya belleği doldurmasın. Okuma sınırın bir bayt fazlasında kesilir: `fstat`'tan sonra büyüyen dosya da atlanır.
 - Kayıtlar bellekte yalnızca düğüm adlarını ve tiplerini tutar, workflow JSON'unu tutmaz - dosya sayısı sınırsızken bellek her workflow'un iki kopyasıyla büyüyordu; ayrıca çıktıya gidebilecek veri yapısal olarak sınırlanır (security.md bulgu 9; Meriç "evet", 2026-10-03).
+- `normalize_workflow` workflow'u kopyalamaz (`deepcopy` yok), sadece okur; normalize düğümler yeniden kurulur, parametreler ve `connections` paylaşılır - derin kopya tek büyük workflow'da tepe belleği ikiye katlıyordu (6,8 MB'lık dosya: 293 -> 149 MB) ve `json.loads`'un kabul ettiği ~500 seviyeden derin parametreli geçerli workflow'u `RecursionError` ile hata sayıyordu (senaryo 44; OPTIMIZATIONS.md bulgu 1; Meriç "evet", 2026-10-03).
 - Metin UTF-8 (BOM'lu da) okunur; çözülemeyen dosya atlanır - eski `errors="ignore"` veriyi sessizce bozuyordu.
 - Sadece `--output` altına yazar; çıktı klasörü girdi klasörünün içindeyse ya da aynıysa çalışmaz - bir sonraki taramada kendi çıktısını okumasın.
 - Çıktı klasörü boş olmalı ya da henüz olmamalı; doluysa araç çalışmaz, hiçbir dosyayı silmez ya da üzerine yazmaz - eski parçalı dosyalar (`2-...md`) yeni çıktıya karışmasın ve araç kullanıcı dosyasını silmesin (Meriç kararı, 2026-10-02). Her çıktı dosyası özel oluşturma kipiyle (`open("x")`) yazılır: çalışma sırasında aynı adla bir dosya ya da symlink belirirse izlenmez, üzerine yazılmaz, çalıştırma net mesajla durur (security.md bulgu 8; Meriç "evet", 2026-10-03).
@@ -60,11 +62,13 @@ Her satır: karar - neden. Bir karar değişecekse önce Meriç'e sorulur, sessi
 ## İzlenebilirlik
 - Her çalıştırma `--log-dir` (varsayılan `./logs`) altına `YYYY-MM-DD.jsonl` trace yazar: `run_id` + `seq`; her dosya için bulundu / yüklendi / atlandı (neden) / puanlandı (puanlar) / tekrar (kime ait) / yazıldı (hangi dosya). Workflow içeriği trace'e girmez, sadece yol, ad, hash ve sayılar.
 - `--debug` aynı trace satırlarını stderr'e de basar.
+- Trace dosyası çalıştırma başına bir kez, satır tamponlu açılır ve `run` sonunda (hata olsa da) kapatılır - her olayda klasör oluşturup dosyayı yeniden açıyordu (8.213 olay); satır tamponu her olayın yazıldığı anda diskte olmasını korur (OPTIMIZATIONS.md bulgu 4; Meriç "evet", 2026-10-03).
 - `traceback` ekrana basılmaz; hata trace'e ve `summary.txt`'ye nedeniyle yazılır.
 
 ## Repo içeriği
 - Testler uydurma JSON'larla; `examples/` altında Zie619 koleksiyonundan 3-5 workflow'un gerçek çıktısı, MIT atfıyla (`examples/NOTICE`) (Meriç kararı, 2026-10-02).
 - Tam çıktı (`output/`), `logs/`, `input/` git'e girmez.
+- Denetim raporları (`security.md`, `OPTIMIZATIONS.md`) yerelde kalır, `.gitignore`'da - public repoya katkıları yok, zayıflık ayrıntısı taşıyorlar (Meriç kararı, 2026-10-03).
 - Lisans MIT.
 
 ## Veri kaynağı
