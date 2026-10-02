@@ -51,8 +51,82 @@ class LlmRuleTests(unittest.TestCase):
         self.assertEqual(llm_step_type(given), "@n8n/n8n-nodes-langchain.agent")
         self.assertIsNone(llm_step_type(["n8n-nodes-base.set", "n8n-nodes-base.httpRequest"]))
 
+    def test_reason_prefers_the_model_node_then_embeddings(self):
+        loader = "@n8n/n8n-nodes-langchain.documentDefaultDataLoader"
+        embeddings = "@n8n/n8n-nodes-langchain.embeddingsOpenAi"
+        model = "@n8n/n8n-nodes-langchain.lmChatAnthropic"
+        self.assertEqual(llm_step_type([loader, embeddings, model]), model)
+        self.assertEqual(llm_step_type([loader, embeddings]), embeddings)
+        self.assertEqual(llm_step_type([loader]), loader)
+
     def test_without_llm_the_data_workflow_stays_data(self):
         self.assertEqual(classify_workflow(workflow("Plain", self.HEAVY_DATA))[1].primary_category, Category.DATA_INTEGRATION)
+
+
+class PatternTagTests(unittest.TestCase):
+    def patterns(self, *types):
+        return classify_workflow(workflow("Tags", [node(f"N{i}", t) for i, t in enumerate(types)]))[1].key_patterns
+
+    def test_embedding_pipeline_is_not_generation_or_agent(self):
+        tags = self.patterns(
+            "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+            "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+            "@n8n/n8n-nodes-langchain.vectorStoreSupabase",
+        )
+        self.assertEqual(tags, ["rag_or_vector_memory"])
+
+    def test_model_without_agent_is_generation_only(self):
+        tags = self.patterns("@n8n/n8n-nodes-langchain.chainLlm", "@n8n/n8n-nodes-langchain.lmChatAnthropic")
+        self.assertEqual(tags, ["ai_generation"])
+
+    def test_base_openai_node_is_generation(self):
+        self.assertEqual(self.patterns("n8n-nodes-base.openAi"), ["ai_generation"])
+
+    def test_agent_node_is_agentic(self):
+        self.assertEqual(self.patterns("@n8n/n8n-nodes-langchain.agent"), ["ai_generation", "agentic_ai"])
+
+    def test_tags_do_not_change_scores(self):
+        _, score = classify_workflow(workflow("Embed", [node("E", "@n8n/n8n-nodes-langchain.embeddingsOpenAi")]))
+        # weight 5 + OpenAI bonus 4 + LangChain bonus 5 + AI signal 2
+        self.assertEqual(score.scores[Category.AI_CONTENT], 16)
+
+
+class ServiceListTests(unittest.TestCase):
+    def test_every_service_node_is_listed_once_by_name(self):
+        metrics = extract_metrics(workflow("Services", [
+            node("Mail", "n8n-nodes-base.gmail"),
+            node("Mail in", "n8n-nodes-base.gmailTrigger"),
+            node("Drive", "n8n-nodes-base.googleDriveTrigger"),
+            node("Drive tool", "n8n-nodes-base.googleDriveTool"),
+            node("Video", "n8n-nodes-base.youTube"),
+            node("Mail out", "n8n-nodes-base.awsSes"),
+            node("Shop", "n8n-nodes-base.wooCommerceTrigger"),
+            node("Sheet", "n8n-nodes-base.googleSheets"),
+            node("Set", "n8n-nodes-base.set"),
+            node("Model", "@n8n/n8n-nodes-langchain.lmChatAnthropic"),
+        ]))
+        self.assertEqual(metrics.external_services, ["AWS SES", "Gmail", "Google Drive", "Google Sheets", "WooCommerce", "YouTube"])
+
+    def test_scoring_still_counts_only_known_services(self):
+        wf = workflow("Three new services", [
+            node("Mail", "n8n-nodes-base.gmail"),
+            node("Drive", "n8n-nodes-base.googleDrive"),
+            node("CRM", "n8n-nodes-base.hubspot"),
+        ])
+        metrics, score = classify_workflow(wf)
+        self.assertEqual(len(metrics.external_services), 3)
+        self.assertEqual(metrics.integration_count, 0)
+        self.assertEqual(score.scores[Category.ORCHESTRATION], 0)
+        self.assertFalse(any(r.startswith("Three or more") for r in score.reasons))
+
+    def test_label_from_untrusted_type_is_one_clean_line(self):
+        metrics = extract_metrics(workflow("Evil", [
+            node("A", "n8n-nodes-base.evil\nType\x1b[31m"),
+            node("B", "n8n-nodes-base."),
+        ]))
+        self.assertEqual(len(metrics.external_services), 1)
+        self.assertNotIn("\n", metrics.external_services[0])
+        self.assertNotIn("\x1b", metrics.external_services[0])
 
 
 class TieTests(unittest.TestCase):
@@ -121,6 +195,15 @@ class ScoringRuleTests(unittest.TestCase):
         _, score = classify_workflow(wf)
         self.assertEqual(max(score.scores.values()), 0)
         self.assertEqual(score.confidence, "none")
+
+    def test_utility_and_n8n_demo_nodes_are_not_services(self):
+        utility = ["htmlExtract", "readPDF", "totp", "iCal", "aiTransform", "executeCommandTool",
+                   "n8nTrainingCustomerDatastore", "n8nTrainingCustomerMessenger", "n8nTrigger"]
+        wf = workflow("Utility only", [node(t, f"n8n-nodes-base.{t}") for t in utility])
+        metrics, score = classify_workflow(wf)
+        self.assertEqual(max(score.scores.values()), 0)
+        self.assertEqual(score.confidence, "none")
+        self.assertEqual(metrics.external_services, [])
 
 
 class TriggerTests(unittest.TestCase):

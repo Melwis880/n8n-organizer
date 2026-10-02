@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from .models import Category
 
-ANALYSIS_VERSION = "2.0.0"
+ANALYSIS_VERSION = "2.1.0"
 
 MAX_WORDS_PER_FILE = 450_000
 
@@ -66,21 +66,22 @@ NODE_CATEGORY_WEIGHTS: dict[str, dict[Category, int]] = {
     },
 }
 
-# Built-in n8n nodes that move or reshape data inside the workflow. Any other
-# n8n-nodes-base type without a weight above is an external service.
+# Built-in n8n nodes that work inside n8n (move or reshape data, n8n's own events, demo data).
+# Any other n8n-nodes-base type without a weight above is an external service.
 SERVICE_NODE_WEIGHT = 2
 
 CORE_NODE_TYPES = {
     f"n8n-nodes-base.{name}"
     for name in (
-        "aggregate", "code", "compareDatasets", "compression", "convertToFile", "cron", "crypto",
-        "dateTime", "debugHelper", "editImage", "executeCommand", "executionData", "extractFromFile",
-        "filter", "form", "formTrigger", "function", "functionItem", "html", "if", "interval",
-        "itemLists", "limit", "localFileTrigger", "manualTrigger", "markdown", "merge",
-        "moveBinaryData", "n8n", "noOp", "readBinaryFile", "readBinaryFiles", "readWriteFile",
-        "removeDuplicates", "renameKeys", "scheduleTrigger", "set", "sort", "splitInBatches",
-        "splitOut", "spreadsheetFile", "start", "stickyNote", "summarize", "switch", "wait",
-        "workflowTrigger", "writeBinaryFile", "xml",
+        "aggregate", "aiTransform", "code", "compareDatasets", "compression", "convertToFile", "cron",
+        "crypto", "dateTime", "debugHelper", "editImage", "executeCommand", "executeCommandTool",
+        "executionData", "extractFromFile", "filter", "form", "formTrigger", "function", "functionItem",
+        "html", "htmlExtract", "iCal", "if", "interval", "itemLists", "limit", "localFileTrigger",
+        "manualTrigger", "markdown", "merge", "moveBinaryData", "n8n", "n8nTrainingCustomerDatastore",
+        "n8nTrainingCustomerMessenger", "n8nTrigger", "noOp", "readBinaryFile", "readBinaryFiles",
+        "readPDF", "readWriteFile", "removeDuplicates", "renameKeys", "scheduleTrigger", "set", "sort",
+        "splitInBatches", "splitOut", "spreadsheetFile", "start", "stickyNote", "summarize", "switch",
+        "totp", "wait", "workflowTrigger", "writeBinaryFile", "xml",
     )
 }
 
@@ -106,6 +107,60 @@ SERVICE_NODE_HINTS = {
     "github": "GitHub",
     "httpRequest": "HTTP API",
     "webhook": "Webhook",
+}
+
+# Display names for service node types whose camelCase split reads badly. Display only: the
+# scoring rules count services from SERVICE_NODE_HINTS above.
+SERVICE_LABELS = {
+    "activeCampaign": "ActiveCampaign",
+    "bambooHr": "BambooHR",
+    "circleCi": "CircleCI",
+    "clickUp": "ClickUp",
+    "coinGecko": "CoinGecko",
+    "convertKit": "ConvertKit",
+    "crateDb": "CrateDB",
+    "customerIo": "Customer.io",
+    "deepL": "DeepL",
+    "emailReadImap": "Email (IMAP)",
+    "emailSend": "Email (SMTP)",
+    "erpNext": "ERPNext",
+    "getResponse": "GetResponse",
+    "goToWebinar": "GoToWebinar",
+    "graphql": "GraphQL",
+    "highLevel": "HighLevel",
+    "hubspot": "HubSpot",
+    "jotForm": "JotForm",
+    "linkedIn": "LinkedIn",
+    "mailerLite": "MailerLite",
+    "messageBird": "MessageBird",
+    "microsoftOneDrive": "Microsoft OneDrive",
+    "mondayCom": "monday.com",
+    "nextCloud": "Nextcloud",
+    "nocoDb": "NocoDB",
+    "openWeatherMap": "OpenWeatherMap",
+    "pagerDuty": "PagerDuty",
+    "payPal": "PayPal",
+    "postHog": "PostHog",
+    "questDb": "QuestDB",
+    "rssFeedRead": "RSS",
+    "sendGrid": "SendGrid",
+    "serviceNow": "ServiceNow",
+    "surveyMonkey": "SurveyMonkey",
+    "timescaleDb": "TimescaleDB",
+    "uptimeRobot": "UptimeRobot",
+    "whatsApp": "WhatsApp",
+    "wooCommerce": "WooCommerce",
+    "wordpress": "WordPress",
+    "youTube": "YouTube",
+}
+
+# Words written in capitals when a label is built from a camelCase type name (awsSes -> AWS SES).
+LABEL_ACRONYMS = {
+    word.capitalize(): word
+    for word in (
+        "AI", "API", "AWS", "CI", "CRM", "DB", "DHL", "FTP", "HR", "HTML", "IO", "MQTT", "AMQP",
+        "NASA", "PDF", "S3", "SES", "SNS", "SQL", "SQS", "SSE", "SSH", "TLS", "TOTP",
+    )
 }
 
 CLIENT_PROBLEM_MAP = {

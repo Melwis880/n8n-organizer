@@ -1,17 +1,21 @@
 from __future__ import annotations
 
+import re
 from collections import defaultdict
 from typing import Any, Iterable
 
 from .config import (
     CORE_NODE_TYPES,
     NODE_CATEGORY_WEIGHTS,
+    LABEL_ACRONYMS,
+    SERVICE_LABELS,
     SERVICE_NODE_HINTS,
     SERVICE_NODE_WEIGHT,
     STICKY_NOTE_TYPE,
     TRIGGER_NODE_TYPES,
 )
 from .models import Category, WorkflowMetrics, WorkflowScore
+from .utils import clean_text
 
 BRANCH_TYPES = {
     "n8n-nodes-base.if",
@@ -20,6 +24,11 @@ BRANCH_TYPES = {
 }
 
 CATEGORY_ORDER = list(Category)
+
+LANGCHAIN_PREFIX = "@n8n/n8n-nodes-langchain."
+
+# LangChain nodes that call a model themselves (besides lm*, chain* and agent* nodes).
+LANGCHAIN_MODEL_NODES = {"openAi", "openAiAssistant", "informationExtractor", "textClassifier", "sentimentAnalysis"}
 
 
 def working_nodes(data: dict[str, Any]) -> list[dict[str, Any]]:
@@ -40,12 +49,48 @@ def is_unweighted_service(node_type: str) -> bool:
     )
 
 
+def service_label(node_type: str) -> str:
+    """Readable service name from a service node type: n8n-nodes-base.googleDriveTrigger -> Google Drive."""
+    name = node_type.split(".", 1)[1]
+    for suffix in ("Trigger", "Tool"):
+        if name.endswith(suffix) and len(name) > len(suffix):
+            name = name[: -len(suffix)]
+    if name in SERVICE_LABELS:
+        return SERVICE_LABELS[name]
+    words = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", name).split()
+    words = [w[0].upper() + w[1:] for w in words]
+    return clean_text(" ".join(LABEL_ACRONYMS.get(w, w) for w in words), 60)
+
+
+def is_llm_step(node_type: str) -> bool:
+    return node_type.startswith(LANGCHAIN_PREFIX) or "openai" in node_type.lower()
+
+
+def generates_text(node_type: str) -> bool:
+    """A node that calls a language model itself: a model, chain or agent node, or an OpenAI node."""
+    if not node_type.startswith(LANGCHAIN_PREFIX):
+        return "openai" in node_type.lower()
+    name = node_type[len(LANGCHAIN_PREFIX):]
+    return name.startswith(("lm", "chain", "agent")) or name in LANGCHAIN_MODEL_NODES
+
+
+def is_agent(node_type: str) -> bool:
+    return node_type.startswith(LANGCHAIN_PREFIX + "agent")
+
+
+def _llm_rank(node_type: str) -> int:
+    if generates_text(node_type):
+        return 0
+    if node_type.startswith(LANGCHAIN_PREFIX + "embeddings"):
+        return 1
+    return 2
+
+
 def llm_step_type(node_types: Iterable[str]) -> str | None:
-    """First (sorted) node type that is an LLM step: any LangChain node or any OpenAI node."""
-    for node_type in sorted(node_types):
-        if node_type.startswith("@n8n/n8n-nodes-langchain.") or "openai" in node_type.lower():
-            return node_type
-    return None
+    """The node type named in the LLM step rule's reason: a model, chain or agent node first, then
+    embeddings, then any other LangChain node; sorted by name within each group."""
+    steps = [t for t in node_types if is_llm_step(t)]
+    return min(steps, key=lambda t: (_llm_rank(t), t)) if steps else None
 
 
 def count_connections(connections: Any) -> int:
@@ -71,7 +116,8 @@ def extract_metrics(data: dict[str, Any]) -> WorkflowMetrics:
     metrics.node_count = len(nodes)
     metrics.connection_count = count_connections(data.get("connections"))
 
-    service_names = set()
+    known_services = set()
+    other_services = set()
     for node in nodes:
         node_type = str(node.get("type", ""))
         node_name = node.get("name")
@@ -86,13 +132,15 @@ def extract_metrics(data: dict[str, Any]) -> WorkflowMetrics:
             metrics.has_subworkflow = True
         if "openai" in node_type.lower() or "langchain" in node_type.lower() or "vector" in node_type.lower():
             metrics.has_ai_or_memory = True
-        for hint, label in SERVICE_NODE_HINTS.items():
-            if hint.lower() in node_type.lower():
-                service_names.add(label)
+        hints = [label for hint, label in SERVICE_NODE_HINTS.items() if hint.lower() in node_type.lower()]
+        known_services.update(hints)
+        if not hints and is_unweighted_service(node_type):
+            other_services.add(service_label(node_type))
 
     metrics.trigger_nodes.sort()
-    metrics.external_services = sorted(service_names)
-    metrics.integration_count = len(metrics.external_services)
+    metrics.external_services = sorted((known_services | other_services) - {""})
+    # Scoring and complexity count only the known services, so the measured accuracy still holds.
+    metrics.integration_count = len(known_services)
     return metrics
 
 
@@ -126,13 +174,17 @@ def detect_patterns(node_types: set[str]) -> tuple[dict[Category, int], list[str
 
     if any("openai" in t.lower() for t in node_types):
         bonus[Category.AI_CONTENT] += 4
-        patterns.append("ai_generation")
         reasons.append("OpenAI node found -> AI_Content +4")
+
+    if any(generates_text(t) for t in node_types):
+        patterns.append("ai_generation")
 
     if any("langchain" in t.lower() for t in node_types):
         bonus[Category.AI_CONTENT] += 5
-        patterns.append("agentic_ai")
         reasons.append("LangChain node found -> AI_Content +5")
+
+    if any(is_agent(t) for t in node_types):
+        patterns.append("agentic_ai")
 
     if any("vector" in t.lower() for t in node_types):
         bonus[Category.AI_CONTENT] += 4

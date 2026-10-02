@@ -33,7 +33,8 @@ def _bullets(items: list[str], empty: str) -> str:
 def _normalized_excerpt(record: WorkflowRecord, max_nodes: int = 15) -> str:
     nodes = [n for n in record.normalized_data.get("nodes", []) if str(n.get("type", "")) != "n8n-nodes-base.stickyNote"]
     excerpt = {
-        "name": clean_text(record.normalized_data.get("name", "")),
+        # Same name as the heading: the file name when the workflow JSON has none.
+        "name": record.metadata.workflow_name,
         "nodes": [{"name": clean_text(n.get("name")), "type": clean_text(n.get("type"))} for n in nodes[:max_nodes]],
     }
     # indent=2 starts every line with a space or a brace, so no line can close the code fence.

@@ -153,6 +153,17 @@ class UntrustedTextTests(TempDirTest):
         self.assertEqual(len(fences), 2)
 
 
+class UnnamedWorkflowTests(TempDirTest):
+    def test_excerpt_uses_the_heading_name(self):
+        wf = {"nodes": [node("On Error", "n8n-nodes-base.errorTrigger")], "connections": {}}
+        write_json(self.input / "0456_Error_Gmail.json", wf)
+        run(self.input, self.output)
+        text = self.output_text()
+        self.assertIn("# Workflow: 0456_Error_Gmail", text)
+        excerpt = json.loads(text.split("```json\n", 1)[1].split("\n```", 1)[0])
+        self.assertEqual(excerpt["name"], "0456_Error_Gmail")
+
+
 class LeakTests(TempDirTest):
     def test_parameters_credentials_urls_and_notes_never_reach_output(self):
         wf = workflow(
