@@ -66,11 +66,18 @@ Bitti sayılır: gerçek veride hata yok, sayılar ve elle kontrol sonucu PROGRE
 **Faz 3 tamam (2026-10-02).**
 
 ## Faz 4 - Dokümantasyon
-- [ ] İngilizce README: ne ve neden, kurulum, kullanım, kategoriler ve puanlama nasıl açıklanır, çıktı formatı, sınırlar
-- [ ] LICENSE (MIT); `examples/` 3-5 Zie619 workflow'unun çıktısı + `examples/NOTICE` (MIT atfı)
-- [ ] CASE_STUDY.md (İngilizce): Hangi sorunu çözüyor? Nasıl çalışıyor? Somut sonucu ne? (sadece ölçülen sayılar)
-- [ ] CI: `.github/workflows/test.yml` (Python 3.10-3.13)
+- [x] İngilizce README: ne ve neden, kurulum, kullanım, kategoriler ve puanlama nasıl açıklanır, çıktı formatı, sınırlar
+- [x] LICENSE (MIT); `examples/` 3-5 Zie619 workflow'unun çıktısı + `examples/NOTICE` (MIT atfı)
+      4 workflow, her kategoriden bir `high` + bir `none` örneği (Splitout/1564, Filter/1667, Error/0456, Manual/0943); sadece çıktı, workflow JSON'u repoda yok. İki üretim birebir aynı.
+- [x] CASE_STUDY.md (İngilizce): Hangi sorunu çözüyor? Nasıl çalışıyor? Somut sonucu ne? (sadece ölçülen sayılar)
+      Tekil sayılar (1.973): 1.080 Data / 746 AI / 147 Orchestration; güven 1.838 high, 48 medium, 37 low, 50 none (Ek 2'den önce; güncel sayılar aşağıda). Çalışma ~10 sn (i7-1255U).
+- [x] CI: `.github/workflows/test.yml` (Python 3.10-3.13)
+      Yerelde 3.12 ve 3.13'te 52 test geçti; 3.11+ özelliği yok (grep). GitHub'da gerçek koşu Faz 5'te doğrulanacak. `pyproject` build alt sınırı `setuptools>=77` (SPDX `license = "MIT"` için); wheel'de LICENSE ve `License-Expression: MIT` var.
 Bitti sayılır: projeyi bilmeyen biri README ile 5 dakikada `build` çalıştırabiliyor.
+Doğrulama (2026-10-02): temiz kopya + yeni venv'de README adımları birebir izlendi: kurulum, klon, `git archive`, `build` toplam 108 sn; çıktı `output/zie619-ae8cf6dc/` ile birebir aynı.
+**Faz 4 tamam (2026-10-02).**
+Ek (2026-10-03, Meriç "evet"): Faz 4'te bulunan 4 küçük çıktı kusuru düzeltildi, `analysis_version` 2.1.0 (DECISIONS). Tam veride sınıflandırma (kategori, ikincil, güven, puanlar) 2.047 workflow'da birebir aynı, karmaşıklık aynı; servis listesi boş profil 447 -> 75, `agentic_ai` 719 -> 362, `ai_generation` 585 -> 723, `name: ""` 968 -> 0. Farklı `PYTHONHASHSEED` ile iki çalıştırma birebir aynı. 62 test (senaryo 30-33); 13 bozmanın 12'si yakalandı, kalan 1'i eksik testi gösterdi (eklendi). `examples/` yeniden üretildi.
+Ek 2 (2026-10-03, Meriç "evet"): 9 yardımcı/demo düğüm tipi çekirdek listeye alındı (DECISIONS). 2.047 workflow'un 13'ü (12 tekil) değişti, hepsi elle okundu: 10 demo/rehber (TOTP, quickstart, Read PDF, demo veri döngüleri) `high` -> `none` (doğru); 1591 Data -> Orchestration (doğru: n8n bağımlılık grafiğini webhook'tan sunuyor); 0499 ikincil Data düştü (doğru); 0260 (kazıyıp webhook'tan RSS sunan) Orchestration'da kaldı, güveni medium -> high - Data daha doğru olurdu, eski tartışmalı karar. Yeni sayılar (tekil): 1.079 Data / 746 AI / 148 Orchestration; güven 1.830 high, 47 medium, 37 low, 59 none; 741.408 kelime. `examples/` değişmedi. 63 test; 2 bozma yakalandı.
 
 ## Faz 5 - Yayın
 - [ ] Temiz oturumda `security-audit` -> `security.md`

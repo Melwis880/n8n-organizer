@@ -1,0 +1,11 @@
+Files found: 4
+Workflows analysed: 4
+Unique workflows: 4
+Duplicates removed: 0 (exact: 0, normalized: 0)
+Skipped: 0
+Errors: 0
+
+Output files:
+  1-AI_Content.md
+  1-Data_Integration.md
+  1-Orchestration_Reliability.md

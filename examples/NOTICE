@@ -1,0 +1,41 @@
+The files in this folder are output of n8n-organizer, generated from four
+workflows in the Zie619/n8n-workflows collection:
+
+  https://github.com/Zie619/n8n-workflows
+  commit ae8cf6dc5b873cbb4f74587aa9180ed3a9f70682 (2025-09-29)
+
+  Error/0456_Error_Gmail_Send_Triggered.json
+  Filter/1667_Filter_Summarize_Automation_Triggered.json
+  Manual/0943_Manual_Xml_Automation_Triggered.json
+  Splitout/1564_Splitout_Manual_Create_Webhook.json
+
+The output holds workflow names, node names and node types taken from those
+files. The workflow JSON itself is not included here.
+
+The collection was published under the MIT License in commit 75cb1e57
+(2025-11-03); the same workflows are present in that licensed version. Its
+license text follows.
+
+--------------------------------------------------------------------------------
+
+MIT License
+
+Copyright (c) 2025 Zie619
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
