@@ -60,8 +60,10 @@ Tam veri (2026-10-02, ~6 sn): 2.077 dosya, 2.066 workflow, 2.034 tekil, 32 tekra
       Örneklem B (tohum 2026, 3x8, bağımsız): sinyalli 20'nin 14'ü doğru (%70); AI_Content 7/8, Data 3/4 (+4 sinyalsiz), Orchestration 4/8. Kalan hatalar: Slack/Telegram düğümü AI puanı veriyor; IF/Merge gibi genel akış düğümleri Orchestration'a çekiyor; çoğu servis düğümünün (Drive, Spotify, QuickBooks, Todoist) Data ağırlığı yok. Dağılım: 796 AI / 810 Data / 367 Orchestration; güven: 1.456 high, 131 medium, 74 low, 312 none.
 - [x] Orchestration/Data sınırı için puanlama turu (Meriç "evet", 2026-10-02): mesajlaşma kanalları AI puanı vermez; IF/Switch/Merge/Wait ve dal bonusu puan vermez, Orchestration sinyali webhook/hata/alt workflow; ağırlıksız servis düğümü tip başına Data +2. `linkedin` anahtarı gerçek tip `linkedIn` ile hiç eşleşmiyordu (kaldırıldı).
       Örneklem C (tohum 777, 3x8 sinyalli, bağımsız): 24/24. B'deki 6 hatanın 5'i düzeldi; kalan: AI'a HTTP ile giden workflow (Midjourney) kural tabanlı görülemez - README'de sınır olarak yazılacak. Dağılım: 1.106 Data / 793 AI / 148 Orchestration; güven: 1.906 high, 50 medium, 39 low, 52 none (önce 312). 52 test; yeni koda 9 bozma: 7 yakalandı, 1 ölü koşul (tetikleyici kontrolü) kaldırıldı, 1 liste içeriği.
-- [ ] Teklif Hazırlayıcı `AGENT.md`'deki çıktı yolunu yeni dosya adlarına güncelle (Meriç onayıyla)
+- [x] Teklif Hazırlayıcı `AGENT.md`'deki çıktı yolunu yeni dosya adlarına güncelle (Meriç onayıyla)
+      2026-10-02 (Meriç "evet"): çıktı `output/zie619-ae8cf6dc/` altına üretildi (eski Türkçe `output/*.md` yerinde duruyor, silme ayrı onay); AGENT.md'deki arşiv satırı temiz sürüme ve yeni çıktıya bakıyor. Aynı yolları anlatan skill dosyaları ve context.md için öneri Meriç onayı bekliyor.
 Bitti sayılır: gerçek veride hata yok, sayılar ve elle kontrol sonucu PROGRESS'te.
+**Faz 3 tamam (2026-10-02).**
 
 ## Faz 4 - Dokümantasyon
 - [ ] İngilizce README: ne ve neden, kurulum, kullanım, kategoriler ve puanlama nasıl açıklanır, çıktı formatı, sınırlar
