@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "n8n-organizer"
+version = "0.1.0"
+description = "Classify n8n workflow JSON files and write category-level Markdown knowledge files."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+dependencies = ["PyYAML==6.0.3"]
+
+[project.scripts]
+n8n-organizer = "n8n_organizer.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
