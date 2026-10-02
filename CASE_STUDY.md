@@ -59,7 +59,7 @@ anything.
 | Skipped as "not a workflow" | 10 (`package.json`, `tsconfig.json`, API listings) |
 | Errors | 0 |
 | Run time | about 10 seconds |
-| Output | 3 files, 741,408 words; each under the 450,000-word NotebookLM limit |
+| Output | 3 files, 741,857 words; each under the 450,000-word NotebookLM limit |
 
 | Category | Workflows |
 |---|---|
@@ -125,10 +125,14 @@ found these bugs in it:
   bad encoding.
 - A typo (`httpsrequest`) and a weight key (`linkedin`) that never matched the real node type
   (`linkedIn`) meant two rules never fired.
+- A third weight key, `vectorStore`, matched no real node type either: the real types are
+  `vectorStoreQdrant`, `vectorStorePinecone` and so on (172 nodes). It is now a prefix match.
+  All 97 workflows with a vector store already had an LLM step, so no category, secondary
+  category or confidence changed; only scores and reason lines did.
 
-The test suite has 62 tests over 33 written scenarios (tests/SCENARIOS.md), all on synthetic
-fixtures. To check that the tests catch real faults, 54 deliberate bugs were planted in the
-code one at a time: 50 were caught. The exercise also found four missing tests (added) and two
+The test suite has 66 tests over 34 written scenarios (tests/SCENARIOS.md), all on synthetic
+fixtures. To check that the tests catch real faults, 60 deliberate bugs were planted in the
+code one at a time: 56 were caught. The exercise also found four missing tests (added) and two
 pieces of dead code (removed).
 
 ## Takeaways

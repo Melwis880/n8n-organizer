@@ -32,7 +32,7 @@ trigger_nodes:
 external_services: []
 key_patterns: []
 dedup_fingerprint: 3b859abee0cb4c4c5dcb7bb2e468776607bdd533
-analysis_version: 2.1.0
+analysis_version: 2.1.1
 ---
 
 # Workflow: XML Conversion
@@ -124,7 +124,7 @@ external_services:
 key_patterns:
 - api_ingestion
 dedup_fingerprint: 3ebeae2331c98587ac31cc5093866aea39b82492
-analysis_version: 2.1.0
+analysis_version: 2.1.1
 ---
 
 # Workflow: Search LinkedIn companies and add them to Airtable CRM

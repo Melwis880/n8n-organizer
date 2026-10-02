@@ -206,6 +206,24 @@ class ScoringRuleTests(unittest.TestCase):
         self.assertEqual(metrics.external_services, [])
 
 
+class PrefixWeightTests(unittest.TestCase):
+    def test_every_vector_store_type_gets_the_vector_store_weight(self):
+        for store in ("vectorStoreQdrant", "vectorStorePinecone", "vectorStoreInMemory"):
+            node_type = f"@n8n/n8n-nodes-langchain.{store}"
+            _, score = classify_workflow(workflow("RAG", [node("Store", node_type)]))
+            self.assertIn(f"{node_type} -> AI_Content +5", score.reasons)
+
+    def test_vector_store_weight_counts_per_node(self):
+        nodes = [node(f"Store {i}", "@n8n/n8n-nodes-langchain.vectorStoreQdrant") for i in range(2)]
+        _, one = classify_workflow(workflow("One", nodes[:1]))
+        _, two = classify_workflow(workflow("Two", nodes))
+        self.assertEqual(two.scores[Category.AI_CONTENT] - one.scores[Category.AI_CONTENT], 5)
+
+    def test_prefix_does_not_reach_unrelated_types(self):
+        _, score = classify_workflow(workflow("Loader", [node("Loader", "@n8n/n8n-nodes-langchain.documentDefaultDataLoader")]))
+        self.assertFalse(any("documentDefaultDataLoader ->" in r for r in score.reasons))
+
+
 class TriggerTests(unittest.TestCase):
     def test_types_ending_in_trigger_are_triggers(self):
         metrics = extract_metrics(AI_WF)

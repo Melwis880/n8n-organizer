@@ -38,3 +38,4 @@ input is synthetic and built in temporary folders by `tests/helpers.py`.
 | 31 | LLM step rule with several AI node types | Reason names a model, chain or agent node first, then an embeddings node, then any other LangChain node | `test_classifier.LlmRuleTests.test_reason_prefers_the_model_node_then_embeddings` |
 | 32 | Pattern tags | `ai_generation` only with a node that calls a model; `agentic_ai` only with an agent node; scores do not change | `test_classifier.PatternTagTests` |
 | 33 | Workflow JSON without a name | The normalized excerpt shows the same name as the heading (the file name) | `test_pipeline.UnnamedWorkflowTests` |
+| 34 | Vector store nodes (`vectorStoreQdrant`, `vectorStorePinecone`, ...) | Each node gets the vector-store weight (AI_Content +5) through a prefix match; unrelated LangChain types do not | `test_classifier.PrefixWeightTests` |

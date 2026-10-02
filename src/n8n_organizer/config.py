@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from .models import Category
 
-ANALYSIS_VERSION = "2.1.0"
+ANALYSIS_VERSION = "2.1.1"
 
 MAX_WORDS_PER_FILE = 450_000
 
@@ -55,13 +55,18 @@ NODE_CATEGORY_WEIGHTS: dict[str, dict[Category, int]] = {
         Category.AI_CONTENT: 6,
         Category.ORCHESTRATION: 1,
     },
-    "@n8n/n8n-nodes-langchain.vectorStore": {
-        Category.AI_CONTENT: 5,
-    },
     "@n8n/n8n-nodes-langchain.embeddingsOpenAi": {
         Category.AI_CONTENT: 5,
     },
     "n8n-nodes-base.openAi": {
+        Category.AI_CONTENT: 5,
+    },
+}
+
+# Weights for node families whose real types share a prefix (vectorStoreQdrant, vectorStorePinecone...).
+# There is no node type named exactly "vectorStore", so an exact key never matched.
+NODE_PREFIX_WEIGHTS: dict[str, dict[Category, int]] = {
+    "@n8n/n8n-nodes-langchain.vectorStore": {
         Category.AI_CONTENT: 5,
     },
 }

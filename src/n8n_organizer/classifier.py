@@ -7,6 +7,7 @@ from typing import Any, Iterable
 from .config import (
     CORE_NODE_TYPES,
     NODE_CATEGORY_WEIGHTS,
+    NODE_PREFIX_WEIGHTS,
     LABEL_ACRONYMS,
     SERVICE_LABELS,
     SERVICE_NODE_HINTS,
@@ -47,6 +48,16 @@ def is_unweighted_service(node_type: str) -> bool:
         and node_type not in CORE_NODE_TYPES
         and node_type not in NODE_CATEGORY_WEIGHTS
     )
+
+
+def node_weights(node_type: str) -> dict[Category, int]:
+    """Weights for one node: an exact key first, then the first matching prefix key (sorted)."""
+    if node_type in NODE_CATEGORY_WEIGHTS:
+        return NODE_CATEGORY_WEIGHTS[node_type]
+    for prefix in sorted(NODE_PREFIX_WEIGHTS):
+        if node_type.startswith(prefix):
+            return NODE_PREFIX_WEIGHTS[prefix]
+    return {}
 
 
 def service_label(node_type: str) -> str:
@@ -203,7 +214,7 @@ def classify_workflow(data: dict[str, Any]) -> tuple[WorkflowMetrics, WorkflowSc
 
     for node in nodes:
         node_type = str(node.get("type", ""))
-        for category, value in NODE_CATEGORY_WEIGHTS.get(node_type, {}).items():
+        for category, value in node_weights(node_type).items():
             scores[category] += value
             reasons.append(f"{node_type} -> {category.value} +{value}")
 

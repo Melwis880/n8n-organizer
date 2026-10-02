@@ -35,6 +35,7 @@ Her satır: karar - neden. Bir karar değişecekse önce Meriç'e sorulur, sessi
 - LLM kuralının gerekçesi önce model/chain/agent düğümünü, sonra embeddings'i, sonra diğer LangChain düğümünü yazar (grup içinde ada göre) - sıradaki ilk tip çoğu zaman document loader'dı (Meriç "evet", 2026-10-03).
 - Normalize JSON alıntısındaki ad başlıktaki adla aynı (adsız workflow'da dosya adı) - 968 profilde `name: ""` görünüyordu (Meriç "evet", 2026-10-03).
 - Bu değişiklikler için `analysis_version` 2.1.0 (Claude, 2026-10-03).
+- Vector store ağırlığı önek eşleşmesiyle verilir (`NODE_PREFIX_WEIGHTS`: `@n8n/n8n-nodes-langchain.vectorStore*` -> AI_Content +5, düğüm başına); tam anahtar `vectorStore` gerçek hiçbir tiple eşleşmiyordu (Qdrant, Pinecone, Supabase... 172 düğüm). Vector store içeren 97 workflow'un hepsinde zaten LLM adımı vardı: kategori, ikincil, güven, etiket ve servisler 1.973 profilde birebir aynı; sadece puanlar ve gerekçe satırları değişti. `analysis_version` 2.1.1 (Meriç "evet", 2026-10-03).
 - n8n içinde çalışan yardımcı düğümler (`htmlExtract`, `readPDF`, `totp`, `iCal`, `aiTransform`, `executeCommandTool`) ve n8n'in kendi demo/olay düğümleri (`n8nTrainingCustomerDatastore`, `n8nTrainingCustomerMessenger`, `n8nTrigger`) `CORE_NODE_TYPES`'a alındı; servis sayılmaz, puan vermez - dış sisteme bağlanmıyorlar, TOTP rehberi gibi demoları "high" güvenle Data_Integration gösteriyorlardı. Tam veride 12 tekil workflow değişti, hepsi elle kontrol edildi (PROGRESS Faz 4) (Meriç "evet", 2026-10-03).
 
 ## Güvenlik ve erişim

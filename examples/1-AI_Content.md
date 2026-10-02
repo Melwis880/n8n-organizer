@@ -36,7 +36,7 @@ external_services:
 key_patterns:
 - rag_or_vector_memory
 dedup_fingerprint: 4f2402322f60718306324c9811558afc5c13d2a2
-analysis_version: 2.1.0
+analysis_version: 2.1.1
 ---
 
 # Workflow: Store Notion's Pages as Vector Documents into Supabase with OpenAI
@@ -80,6 +80,7 @@ Client problems this pattern can answer: Content generation automation, AI chatb
 ## 9. Classification Reasons
 - LLM step found (@n8n/n8n-nodes-langchain.embeddingsOpenAi) -> AI_Content by rule
 - @n8n/n8n-nodes-langchain.embeddingsOpenAi -> AI_Content +5
+- @n8n/n8n-nodes-langchain.vectorStoreSupabase -> AI_Content +5
 - n8n-nodes-base.notion (service) -> Data_Integration +2
 - n8n-nodes-base.notionTrigger (service) -> Data_Integration +2
 - OpenAI node found -> AI_Content +4

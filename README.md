@@ -136,7 +136,7 @@ Three categories, chosen for what a client asks for, not for node families:
    | Webhook, Execute Workflow, Execute Workflow Trigger | Orchestration +4 |
    | Respond to Webhook, Stop and Error | Orchestration +3 |
    | LangChain Agent | AI +6, Orchestration +1 |
-   | OpenAI (base and LangChain), LangChain Vector Store, OpenAI Embeddings | AI +5 |
+   | OpenAI (base and LangChain), any LangChain vector store (`vectorStore*`), OpenAI Embeddings | AI +5 |
 
 2. **Other services.** Every other built-in service node (Gmail, Drive, Slack, Todoist,
    QuickBooks...) adds Data +2, once per node type. Built-in core nodes (Set, Code, IF, Merge,
