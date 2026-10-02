@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import Any
+from typing import Any, Iterable
 
 from .config import NODE_CATEGORY_WEIGHTS, SERVICE_NODE_HINTS, STICKY_NOTE_TYPE, TRIGGER_NODE_TYPES
 from .models import Category, WorkflowMetrics, WorkflowScore
@@ -22,6 +22,14 @@ def working_nodes(data: dict[str, Any]) -> list[dict[str, Any]]:
 
 def is_trigger(node_type: str) -> bool:
     return node_type in TRIGGER_NODE_TYPES or node_type.endswith("Trigger")
+
+
+def llm_step_type(node_types: Iterable[str]) -> str | None:
+    """First (sorted) node type that is an LLM step: any LangChain node or any OpenAI node."""
+    for node_type in sorted(node_types):
+        if node_type.startswith("@n8n/n8n-nodes-langchain.") or "openai" in node_type.lower():
+            return node_type
+    return None
 
 
 def count_connections(connections: Any) -> int:
@@ -131,7 +139,8 @@ def classify_workflow(data: dict[str, Any]) -> tuple[WorkflowMetrics, WorkflowSc
             scores[category] += value
             reasons.append(f"{node_type} -> {category.value} +{value}")
 
-    pattern_bonus, patterns, pattern_reasons = detect_patterns({str(n.get("type", "")) for n in nodes})
+    node_types = {str(n.get("type", "")) for n in nodes}
+    pattern_bonus, patterns, pattern_reasons = detect_patterns(node_types)
     for category, value in pattern_bonus.items():
         scores[category] += value
     reasons.extend(pattern_reasons)
@@ -151,17 +160,29 @@ def classify_workflow(data: dict[str, Any]) -> tuple[WorkflowMetrics, WorkflowSc
 
     # Ties break by the fixed category order, so the same input always gives the same result.
     ranked = sorted(scores.items(), key=lambda x: (-x[1], CATEGORY_ORDER.index(x[0])))
-    primary, top_score = ranked[0]
-    second, second_score = ranked[1]
-    secondary = second if second_score > 0 else None
+    llm_type = llm_step_type(node_types)
 
-    delta_ratio = (top_score - second_score) / max(top_score, 1)
-    if delta_ratio > 0.40:
+    if llm_type:
+        # Any LLM step makes it an AI workflow; repeated HTTP/Sheets/IF nodes must not outvote it.
+        primary = Category.AI_CONTENT
+        others = [(c, s) for c, s in ranked if c != primary]
+        secondary = others[0][0] if others[0][1] > 0 else None
         confidence = "high"
-    elif delta_ratio > 0.20:
-        confidence = "medium"
+        reasons.insert(0, f"LLM step found ({llm_type}) -> AI_Content by rule")
+    elif ranked[0][1] == 0:
+        primary, secondary, confidence = ranked[0][0], None, "none"
+        reasons.insert(0, f"No scoring signal; placed in {primary.value} by default")
     else:
-        confidence = "low"
+        primary, top_score = ranked[0]
+        second, second_score = ranked[1]
+        secondary = second if second_score > 0 else None
+        delta_ratio = (top_score - second_score) / max(top_score, 1)
+        if delta_ratio > 0.40:
+            confidence = "high"
+        elif delta_ratio > 0.20:
+            confidence = "medium"
+        else:
+            confidence = "low"
 
     return metrics, WorkflowScore(
         scores=scores,

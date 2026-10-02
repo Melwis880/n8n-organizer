@@ -1,6 +1,6 @@
 import unittest
 
-from n8n_organizer.classifier import classify_workflow, count_connections, extract_metrics
+from n8n_organizer.classifier import classify_workflow, count_connections, extract_metrics, llm_step_type
 from n8n_organizer.models import Category
 
 from helpers import AI_WF, DATA_WF, ORCH_WF, node, workflow
@@ -12,11 +12,47 @@ class CategoryTests(unittest.TestCase):
         self.assertEqual(classify_workflow(DATA_WF)[1].primary_category, Category.DATA_INTEGRATION)
         self.assertEqual(classify_workflow(ORCH_WF)[1].primary_category, Category.ORCHESTRATION)
 
-    def test_no_signal_falls_back_to_first_category_with_low_confidence(self):
+    def test_no_signal_falls_back_to_first_category_with_confidence_none(self):
         _, score = classify_workflow(workflow("Empty", [node("Set", "n8n-nodes-base.set")]))
         self.assertEqual(score.primary_category, Category.DATA_INTEGRATION)
         self.assertIsNone(score.secondary_category)
-        self.assertEqual(score.confidence, "low")
+        self.assertEqual(score.confidence, "none")
+        self.assertTrue(score.reasons[0].startswith("No scoring signal"))
+
+
+class LlmRuleTests(unittest.TestCase):
+    HEAVY_DATA = [node(f"Fetch {i}", "n8n-nodes-base.httpRequest") for i in range(6)] + [
+        node(f"Sheet {i}", "n8n-nodes-base.googleSheets") for i in range(4)
+    ]
+
+    def test_llm_step_wins_over_many_data_nodes(self):
+        wf = workflow("Enrich leads", self.HEAVY_DATA + [node("Model", "@n8n/n8n-nodes-langchain.lmChatOpenAi")])
+        _, score = classify_workflow(wf)
+        self.assertEqual(score.primary_category, Category.AI_CONTENT)
+        self.assertEqual(score.secondary_category, Category.DATA_INTEGRATION)
+        self.assertEqual(score.confidence, "high")
+        self.assertIn("LLM step found (@n8n/n8n-nodes-langchain.lmChatOpenAi)", score.reasons[0])
+
+    def test_any_langchain_node_counts(self):
+        wf = workflow("Gemini bot", self.HEAVY_DATA + [node("Gemini", "@n8n/n8n-nodes-langchain.lmChatGoogleGemini")])
+        self.assertEqual(classify_workflow(wf)[1].primary_category, Category.AI_CONTENT)
+
+    def test_base_openai_node_counts(self):
+        wf = workflow("Summarise", self.HEAVY_DATA + [node("OpenAI", "n8n-nodes-base.openAi")])
+        self.assertEqual(classify_workflow(wf)[1].primary_category, Category.AI_CONTENT)
+
+    def test_sticky_note_mentioning_ai_does_not_count(self):
+        wf = workflow("No AI", self.HEAVY_DATA + [node("Sticky Note", "n8n-nodes-base.stickyNote", parameters={"content": "OpenAI"})])
+        self.assertEqual(classify_workflow(wf)[1].primary_category, Category.DATA_INTEGRATION)
+
+    def test_reason_names_the_first_llm_type_in_sorted_order(self):
+        # Set order changes between Python runs; the reason line must not.
+        given = ["n8n-nodes-base.openAi", "@n8n/n8n-nodes-langchain.lmChatOpenAi", "@n8n/n8n-nodes-langchain.agent"]
+        self.assertEqual(llm_step_type(given), "@n8n/n8n-nodes-langchain.agent")
+        self.assertIsNone(llm_step_type(["n8n-nodes-base.set", "n8n-nodes-base.httpRequest"]))
+
+    def test_without_llm_the_data_workflow_stays_data(self):
+        self.assertEqual(classify_workflow(workflow("Plain", self.HEAVY_DATA))[1].primary_category, Category.DATA_INTEGRATION)
 
 
 class TieTests(unittest.TestCase):

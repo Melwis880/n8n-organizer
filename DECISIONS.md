@@ -24,6 +24,8 @@ Her satır: karar - neden. Bir karar değişecekse önce Meriç'e sorulur, sessi
 - Kategori dosyası kelime sınırı 450.000; aşınca `2-<Category>.md` açılır - NotebookLM kaynak sınırı.
 - `connection_count` gerçek kenar sayısıdır (tüm çıkış türleri: `main`, `ai_*`); eski kod çıkış yuvası sayıyordu - AI workflow'larının bağlantıları `ai_languageModel` gibi türlerde (Claude düzeltmesi, 2026-10-02).
 - Kategori eşitliğinde sabit sıra kazanır: Data_Integration, AI_Content, Orchestration_Reliability; hiçbir sinyal yoksa Data_Integration + `low` güven - deterministik kural (Claude, 2026-10-02).
+- LLM adımı kuralı: workflow'da herhangi bir LangChain düğümü (`@n8n/n8n-nodes-langchain.*`) ya da tipinde `openai` geçen bir düğüm varsa ana kategori AI_Content, güven `high`; ikincil kategori puanlardan gelir - elle kontrolde 6 hatanın 5'i, tekrar eden HTTP/Sheets/IF düğümlerinin LLM adımını geçmesiydi; kural örneklemde doğruluğu 16/24'ten 21/22'ye çıkardı (Meriç kararı, 2026-10-02).
+- Hiç puan almayan workflow Data_Integration'a düşer ama güveni `none` olur ve gerekçe satırı bunu söyler - kategori ve dosya adları değişmesin, okuyan bunun tahmin olmadığını görsün (Meriç kararı, 2026-10-02).
 - Çıktı biçimi değiştiği için `analysis_version` 2.0.0 (Claude, 2026-10-02).
 
 ## Güvenlik ve erişim
@@ -32,7 +34,7 @@ Her satır: karar - neden. Bir karar değişecekse önce Meriç'e sorulur, sessi
 - 10 MB'tan büyük JSON atlanır (trace'e neden yazılır) - bozuk ya da kötü niyetli dev dosya belleği doldurmasın.
 - Metin UTF-8 (BOM'lu da) okunur; çözülemeyen dosya atlanır - eski `errors="ignore"` veriyi sessizce bozuyordu.
 - Sadece `--output` altına yazar; çıktı klasörü girdi klasörünün içindeyse ya da aynıysa çalışmaz - bir sonraki taramada kendi çıktısını okumasın.
-- Çıktı klasörü boş olmalı ya da henüz olmamalı; doluysa araç çalışmaz, hiçbir dosyayı silmez ya da üzerine yazmaz - eski parçalı dosyalar (`2-...md`) yeni çıktıya karışmasın ve araç kullanıcı dosyasını silmesin (Claude önerisi, 2026-10-02; Meriç onayı bekliyor).
+- Çıktı klasörü boş olmalı ya da henüz olmamalı; doluysa araç çalışmaz, hiçbir dosyayı silmez ya da üzerine yazmaz - eski parçalı dosyalar (`2-...md`) yeni çıktıya karışmasın ve araç kullanıcı dosyasını silmesin (Meriç kararı, 2026-10-02).
 - Çıktıya sadece düğüm adı ve tipi, servis adları, ölçümler, hash'ler girer; parametreler, credentials, sticky note metni ve URL'ler asla girmez - agent.md Kural 4, workflow'larda gömülü anahtar olabilir.
 - `source_file` girdi köküne göre göreli yazılır - makinedeki yerel yollar çıktıya sızmasın.
 - Workflow adları güvenilmeyen metin: YAML'a `safe_dump` ile, Markdown başlıklarına kontrol karakterleri ve satır sonları temizlenerek yazılır.
@@ -47,3 +49,7 @@ Her satır: karar - neden. Bir karar değişecekse önce Meriç'e sorulur, sessi
 - Testler uydurma JSON'larla; `examples/` altında Zie619 koleksiyonundan 3-5 workflow'un gerçek çıktısı, MIT atfıyla (`examples/NOTICE`) (Meriç kararı, 2026-10-02).
 - Tam çıktı (`output/`), `logs/`, `input/` git'e girmez.
 - Lisans MIT.
+
+## Veri kaynağı
+- Araç, Zie619/n8n-workflows koleksiyonunun `ae8cf6dc` (2025-09-29) sürümüyle çalıştırılır; `git archive` ile `input/zie619-ae8cf6dc/` altına çıkarılır (git'e girmez, n8n-workflows reposuna dokunulmaz) - sonraki commit'ler koleksiyonu bozdu: `f293c236` ("ok") binlerce kopuk `stopAndError` düğümü ekledi (8.791 kopuk), `3c0a92c4` ("ssd (#10)") LangChain düğümlerini `noOp`'a çevirdi ve bağlantıları kırdı. Kanıt: trace ve tip sayımları (PROGRESS Faz 3) (Meriç kararı, 2026-10-02).
+- Koleksiyonun MIT lisansı `75cb1e57` (2025-11-03) ile eklendi; aynı workflow'lar lisanslı sürümde de var, atıf bu lisansa yapılır.

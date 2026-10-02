@@ -28,3 +28,5 @@ input is synthetic and built in temporary folders by `tests/helpers.py`.
 | 21 | File system lists folders and files in a non-sorted order | Files are still processed in sorted path order | `test_loader.OrderTests` |
 | 22 | Two categories tie | The earlier category in the fixed order wins, confidence `low` | `test_classifier.TieTests` |
 | 23 | Untrusted text helper | Control, bidi and zero-width characters become spaces; whitespace collapses; long text is cut with `...` | `test_utils.CleanTextTests` |
+| 24 | Workflow with an LLM step (any LangChain node or OpenAI node) among many data nodes | Primary is AI_Content by rule, confidence `high`, reason names the node type; secondary comes from scores | `test_classifier.LlmRuleTests` |
+| 25 | Workflow with no scoring signal | Data_Integration by default, confidence `none`, reason says so | `test_classifier.CategoryTests.test_no_signal_falls_back_to_first_category_with_confidence_none` |

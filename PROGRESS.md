@@ -52,8 +52,13 @@ Tam veri (2026-10-02, ~6 sn): 2.077 dosya, 2.066 workflow, 2.034 tekil, 32 tekra
 **Faz 2 tamam (2026-10-02).**
 
 ## Faz 3 - Gerçek veri
-- [ ] Tam Zie619 koleksiyonunda çalıştır (eski: 2.072 dosya, 2.037 tekil, 35 tekrar, 5 "hata"); farkları açıkla
-- [ ] Trace'i ve her kategoriden 5 workflow'u elle oku; yanlış sınıflandırma oranını yaz
+- [x] Tam Zie619 koleksiyonunda çalıştır (eski: 2.072 dosya, 2.037 tekil, 35 tekrar, 5 "hata"); farkları açıkla
+      Bulgu (2026-10-02): güncel koleksiyon bozuk. `f293c236` ("ok") binlerce kopuk `stopAndError` ekledi, `3c0a92c4` ("ssd (#10)") LangChain düğümlerini `noOp`'a çevirdi (adlar kaldı: 320 "OpenAI Chat Model", 180 "AI Agent") ve bağlantıları kırdı (2.123 HTTP Request kopuk). Son temiz sürüm `ae8cf6dc` (2025-09-29): 3.959 LangChain düğümü, 241 kopuk düğüm. Meriç kararı: araç bu sürümle çalışır, `input/zie619-ae8cf6dc/` (git archive, git dışı).
+      Temiz veride: 2.057 dosya, 2.047 workflow, 1.973 tekil, 74 birebir tekrar (hepsi aynı klasörde farklı numarayla), 10 workflow değil, 0 hata. Farklı `PYTHONHASHSEED` ile iki çalıştırma birebir aynı.
+- [x] Trace'i ve her kategoriden 5 workflow'u elle oku; yanlış sınıflandırma oranını yaz
+      Örneklem A (tohum 42, 3x8, ayar için kullanıldı): 16/24 doğru, 2 sinyalsiz; 6 hatanın 5'i LLM adımlı workflow'un HTTP/Sheets/IF tekrarlarıyla başka kategoriye düşmesi. -> LLM adımı kuralı + sinyalsiz için `none` güveni (Meriç kararı). A üzerinde 21/22 (iyimser: ayar örneklemi).
+      Örneklem B (tohum 2026, 3x8, bağımsız): sinyalli 20'nin 14'ü doğru (%70); AI_Content 7/8, Data 3/4 (+4 sinyalsiz), Orchestration 4/8. Kalan hatalar: Slack/Telegram düğümü AI puanı veriyor; IF/Merge gibi genel akış düğümleri Orchestration'a çekiyor; çoğu servis düğümünün (Drive, Spotify, QuickBooks, Todoist) Data ağırlığı yok. Dağılım: 796 AI / 810 Data / 367 Orchestration; güven: 1.456 high, 131 medium, 74 low, 312 none.
+- [ ] Orchestration/Data sınırı için puanlama turu (öneri, Meriç kararı bekliyor); yeni bağımsız örneklem C ile ölç
 - [ ] Teklif Hazırlayıcı `AGENT.md`'deki çıktı yolunu yeni dosya adlarına güncelle (Meriç onayıyla)
 Bitti sayılır: gerçek veride hata yok, sayılar ve elle kontrol sonucu PROGRESS'te.
 
