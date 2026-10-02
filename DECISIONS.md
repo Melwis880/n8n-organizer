@@ -25,6 +25,9 @@ Her satır: karar - neden. Bir karar değişecekse önce Meriç'e sorulur, sessi
 - `connection_count` gerçek kenar sayısıdır (tüm çıkış türleri: `main`, `ai_*`); eski kod çıkış yuvası sayıyordu - AI workflow'larının bağlantıları `ai_languageModel` gibi türlerde (Claude düzeltmesi, 2026-10-02).
 - Kategori eşitliğinde sabit sıra kazanır: Data_Integration, AI_Content, Orchestration_Reliability; hiçbir sinyal yoksa Data_Integration + `low` güven - deterministik kural (Claude, 2026-10-02).
 - LLM adımı kuralı: workflow'da herhangi bir LangChain düğümü (`@n8n/n8n-nodes-langchain.*`) ya da tipinde `openai` geçen bir düğüm varsa ana kategori AI_Content, güven `high`; ikincil kategori puanlardan gelir - elle kontrolde 6 hatanın 5'i, tekrar eden HTTP/Sheets/IF düğümlerinin LLM adımını geçmesiydi; kural örneklemde doğruluğu 16/24'ten 21/22'ye çıkardı (Meriç kararı, 2026-10-02).
+- Mesajlaşma kanalları (Slack, Telegram, Twitter, LinkedIn) AI puanı vermez; servis sayılır - AI değil kanal; "Zendesk-to-slack" AI'a düşüyordu (Meriç kararı, 2026-10-02).
+- Genel akış düğümleri (IF, Switch, Merge, Wait) ve "2+ dal" bonusu puan vermez; Orchestration sinyalleri: webhook, respondToWebhook, errorTrigger, executeWorkflow, executeWorkflowTrigger, stopAndError - senkron işler dal düğümleri yüzünden Orchestration'a düşüyordu (Meriç kararı, 2026-10-02).
+- Ağırlığı olmayan her `n8n-nodes-base.*` servis düğümü (çekirdek liste `CORE_NODE_TYPES` dışı) tip başına bir kez Data_Integration +2 - Drive, Spotify, QuickBooks gibi senkron düğümlerinin hiç Data sinyali yoktu (Meriç kararı, 2026-10-02).
 - Hiç puan almayan workflow Data_Integration'a düşer ama güveni `none` olur ve gerekçe satırı bunu söyler - kategori ve dosya adları değişmesin, okuyan bunun tahmin olmadığını görsün (Meriç kararı, 2026-10-02).
 - Çıktı biçimi değiştiği için `analysis_version` 2.0.0 (Claude, 2026-10-02).
 

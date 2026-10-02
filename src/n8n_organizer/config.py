@@ -39,20 +39,14 @@ NODE_CATEGORY_WEIGHTS: dict[str, dict[Category, int]] = {
     "n8n-nodes-base.errorTrigger": {
         Category.ORCHESTRATION: 6,
     },
-    "n8n-nodes-base.if": {
-        Category.ORCHESTRATION: 2,
-    },
-    "n8n-nodes-base.switch": {
-        Category.ORCHESTRATION: 3,
-    },
-    "n8n-nodes-base.merge": {
-        Category.ORCHESTRATION: 2,
-    },
-    "n8n-nodes-base.wait": {
-        Category.ORCHESTRATION: 2,
-    },
     "n8n-nodes-base.executeWorkflow": {
         Category.ORCHESTRATION: 4,
+    },
+    "n8n-nodes-base.executeWorkflowTrigger": {
+        Category.ORCHESTRATION: 4,
+    },
+    "n8n-nodes-base.stopAndError": {
+        Category.ORCHESTRATION: 3,
     },
     "@n8n/n8n-nodes-langchain.openAi": {
         Category.AI_CONTENT: 5,
@@ -70,19 +64,24 @@ NODE_CATEGORY_WEIGHTS: dict[str, dict[Category, int]] = {
     "n8n-nodes-base.openAi": {
         Category.AI_CONTENT: 5,
     },
-    "n8n-nodes-base.telegram": {
-        Category.AI_CONTENT: 2,
-    },
-    "n8n-nodes-base.slack": {
-        Category.AI_CONTENT: 2,
-        Category.ORCHESTRATION: 1,
-    },
-    "n8n-nodes-base.twitter": {
-        Category.AI_CONTENT: 3,
-    },
-    "n8n-nodes-base.linkedin": {
-        Category.AI_CONTENT: 3,
-    },
+}
+
+# Built-in n8n nodes that move or reshape data inside the workflow. Any other
+# n8n-nodes-base type without a weight above is an external service.
+SERVICE_NODE_WEIGHT = 2
+
+CORE_NODE_TYPES = {
+    f"n8n-nodes-base.{name}"
+    for name in (
+        "aggregate", "code", "compareDatasets", "compression", "convertToFile", "cron", "crypto",
+        "dateTime", "debugHelper", "editImage", "executeCommand", "executionData", "extractFromFile",
+        "filter", "form", "formTrigger", "function", "functionItem", "html", "if", "interval",
+        "itemLists", "limit", "localFileTrigger", "manualTrigger", "markdown", "merge",
+        "moveBinaryData", "n8n", "noOp", "readBinaryFile", "readBinaryFiles", "readWriteFile",
+        "removeDuplicates", "renameKeys", "scheduleTrigger", "set", "sort", "splitInBatches",
+        "splitOut", "spreadsheetFile", "start", "stickyNote", "summarize", "switch", "wait",
+        "workflowTrigger", "writeBinaryFile", "xml",
+    )
 }
 
 TRIGGER_NODE_TYPES = {

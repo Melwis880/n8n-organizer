@@ -30,3 +30,7 @@ input is synthetic and built in temporary folders by `tests/helpers.py`.
 | 23 | Untrusted text helper | Control, bidi and zero-width characters become spaces; whitespace collapses; long text is cut with `...` | `test_utils.CleanTextTests` |
 | 24 | Workflow with an LLM step (any LangChain node or OpenAI node) among many data nodes | Primary is AI_Content by rule, confidence `high`, reason names the node type; secondary comes from scores | `test_classifier.LlmRuleTests` |
 | 25 | Workflow with no scoring signal | Data_Integration by default, confidence `none`, reason says so | `test_classifier.CategoryTests.test_no_signal_falls_back_to_first_category_with_confidence_none` |
+| 26 | Messaging channel nodes (Slack, Telegram, Twitter, LinkedIn) | No AI_Content score; they count as services | `test_classifier.ScoringRuleTests.test_messaging_channels_give_no_ai_score` |
+| 27 | Only generic flow nodes (IF, Merge, Switch, Wait) besides services | No Orchestration_Reliability score | `test_classifier.ScoringRuleTests.test_generic_flow_nodes_alone_do_not_make_orchestration` |
+| 28 | Sub-workflow trigger and Stop and Error | Orchestration_Reliability signals | `test_classifier.ScoringRuleTests.test_sub_workflows_and_error_stops_are_orchestration` |
+| 29 | Service nodes without their own weight (Drive, Todoist...) | Data_Integration +2 once per type, with a reason line; core nodes and non-base types give nothing | `test_classifier.ScoringRuleTests` |

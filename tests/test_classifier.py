@@ -57,13 +57,70 @@ class LlmRuleTests(unittest.TestCase):
 
 class TieTests(unittest.TestCase):
     def test_tie_goes_to_the_earlier_category(self):
-        # telegram gives AI_Content +2, wait gives Orchestration_Reliability +2.
+        # googleSheets gives Data_Integration +4, webhook gives Orchestration_Reliability +4.
         _, score = classify_workflow(
-            workflow("Tie", [node("Wait", "n8n-nodes-base.wait"), node("Telegram", "n8n-nodes-base.telegram")])
+            workflow("Tie", [node("Hook", "n8n-nodes-base.webhook"), node("Sheet", "n8n-nodes-base.googleSheets")])
         )
-        self.assertEqual(score.primary_category, Category.AI_CONTENT)
+        self.assertEqual(score.scores[Category.DATA_INTEGRATION], score.scores[Category.ORCHESTRATION])
+        self.assertEqual(score.primary_category, Category.DATA_INTEGRATION)
         self.assertEqual(score.secondary_category, Category.ORCHESTRATION)
         self.assertEqual(score.confidence, "low")
+
+
+class ScoringRuleTests(unittest.TestCase):
+    def test_messaging_channels_give_no_ai_score(self):
+        wf = workflow("Zendesk to Slack", [
+            node("Cron", "n8n-nodes-base.cron"),
+            node("Zendesk", "n8n-nodes-base.zendesk"),
+            node("Slack", "n8n-nodes-base.slack"),
+            node("Telegram", "n8n-nodes-base.telegram"),
+            node("Tweet", "n8n-nodes-base.twitter"),
+            node("Post", "n8n-nodes-base.linkedIn"),
+        ])
+        _, score = classify_workflow(wf)
+        self.assertEqual(score.scores[Category.AI_CONTENT], 0)
+        self.assertEqual(score.primary_category, Category.DATA_INTEGRATION)
+
+    def test_generic_flow_nodes_alone_do_not_make_orchestration(self):
+        wf = workflow("Telegram files to Drive", [
+            node("Trigger", "n8n-nodes-base.telegramTrigger"),
+            node("If", "n8n-nodes-base.if"),
+            node("Merge", "n8n-nodes-base.merge"),
+            node("Switch", "n8n-nodes-base.switch"),
+            node("Wait", "n8n-nodes-base.wait"),
+            node("Drive", "n8n-nodes-base.googleDrive"),
+        ])
+        _, score = classify_workflow(wf)
+        self.assertEqual(score.scores[Category.ORCHESTRATION], 0)
+        self.assertEqual(score.primary_category, Category.DATA_INTEGRATION)
+
+    def test_sub_workflows_and_error_stops_are_orchestration(self):
+        wf = workflow("Router", [
+            node("Called", "n8n-nodes-base.executeWorkflowTrigger"),
+            node("Fail", "n8n-nodes-base.stopAndError"),
+            node("Drive", "n8n-nodes-base.googleDrive"),
+        ])
+        _, score = classify_workflow(wf)
+        self.assertEqual(score.scores[Category.ORCHESTRATION], 7)
+        self.assertEqual(score.primary_category, Category.ORCHESTRATION)
+
+    def test_service_nodes_count_once_per_type(self):
+        wf = workflow("Two drives", [node("A", "n8n-nodes-base.googleDrive"), node("B", "n8n-nodes-base.googleDrive"), node("T", "n8n-nodes-base.todoist")])
+        _, score = classify_workflow(wf)
+        self.assertEqual(score.scores[Category.DATA_INTEGRATION], 4)
+        self.assertIn("n8n-nodes-base.googleDrive (service) -> Data_Integration +2", score.reasons)
+
+    def test_core_nodes_and_non_base_types_are_not_services(self):
+        wf = workflow("Core only", [
+            node("Set", "n8n-nodes-base.set"),
+            node("Code", "n8n-nodes-base.code"),
+            node("Manual", "n8n-nodes-base.manualTrigger"),
+            node("Schedule", "n8n-nodes-base.scheduleTrigger"),
+            node("Custom", "n8n-nodes-community.something"),
+        ])
+        _, score = classify_workflow(wf)
+        self.assertEqual(max(score.scores.values()), 0)
+        self.assertEqual(score.confidence, "none")
 
 
 class TriggerTests(unittest.TestCase):

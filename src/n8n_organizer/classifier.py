@@ -3,7 +3,14 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Any, Iterable
 
-from .config import NODE_CATEGORY_WEIGHTS, SERVICE_NODE_HINTS, STICKY_NOTE_TYPE, TRIGGER_NODE_TYPES
+from .config import (
+    CORE_NODE_TYPES,
+    NODE_CATEGORY_WEIGHTS,
+    SERVICE_NODE_HINTS,
+    SERVICE_NODE_WEIGHT,
+    STICKY_NOTE_TYPE,
+    TRIGGER_NODE_TYPES,
+)
 from .models import Category, WorkflowMetrics, WorkflowScore
 
 BRANCH_TYPES = {
@@ -22,6 +29,15 @@ def working_nodes(data: dict[str, Any]) -> list[dict[str, Any]]:
 
 def is_trigger(node_type: str) -> bool:
     return node_type in TRIGGER_NODE_TYPES or node_type.endswith("Trigger")
+
+
+def is_unweighted_service(node_type: str) -> bool:
+    """A built-in n8n node for an outside service (Drive, Stripe, Todoist...) that has no weight of its own."""
+    return (
+        node_type.startswith("n8n-nodes-base.")
+        and node_type not in CORE_NODE_TYPES
+        and node_type not in NODE_CATEGORY_WEIGHTS
+    )
 
 
 def llm_step_type(node_types: Iterable[str]) -> str | None:
@@ -140,14 +156,15 @@ def classify_workflow(data: dict[str, Any]) -> tuple[WorkflowMetrics, WorkflowSc
             reasons.append(f"{node_type} -> {category.value} +{value}")
 
     node_types = {str(n.get("type", "")) for n in nodes}
+    for node_type in sorted(node_types):
+        if is_unweighted_service(node_type):
+            scores[Category.DATA_INTEGRATION] += SERVICE_NODE_WEIGHT
+            reasons.append(f"{node_type} (service) -> {Category.DATA_INTEGRATION.value} +{SERVICE_NODE_WEIGHT}")
+
     pattern_bonus, patterns, pattern_reasons = detect_patterns(node_types)
     for category, value in pattern_bonus.items():
         scores[category] += value
     reasons.extend(pattern_reasons)
-
-    if metrics.branch_count >= 2:
-        scores[Category.ORCHESTRATION] += 2
-        reasons.append("Two or more branch nodes -> Orchestration_Reliability +2")
 
     if metrics.has_ai_or_memory:
         scores[Category.AI_CONTENT] += 2

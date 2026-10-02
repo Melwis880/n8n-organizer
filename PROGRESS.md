@@ -58,7 +58,8 @@ Tam veri (2026-10-02, ~6 sn): 2.077 dosya, 2.066 workflow, 2.034 tekil, 32 tekra
 - [x] Trace'i ve her kategoriden 5 workflow'u elle oku; yanlış sınıflandırma oranını yaz
       Örneklem A (tohum 42, 3x8, ayar için kullanıldı): 16/24 doğru, 2 sinyalsiz; 6 hatanın 5'i LLM adımlı workflow'un HTTP/Sheets/IF tekrarlarıyla başka kategoriye düşmesi. -> LLM adımı kuralı + sinyalsiz için `none` güveni (Meriç kararı). A üzerinde 21/22 (iyimser: ayar örneklemi).
       Örneklem B (tohum 2026, 3x8, bağımsız): sinyalli 20'nin 14'ü doğru (%70); AI_Content 7/8, Data 3/4 (+4 sinyalsiz), Orchestration 4/8. Kalan hatalar: Slack/Telegram düğümü AI puanı veriyor; IF/Merge gibi genel akış düğümleri Orchestration'a çekiyor; çoğu servis düğümünün (Drive, Spotify, QuickBooks, Todoist) Data ağırlığı yok. Dağılım: 796 AI / 810 Data / 367 Orchestration; güven: 1.456 high, 131 medium, 74 low, 312 none.
-- [ ] Orchestration/Data sınırı için puanlama turu (öneri, Meriç kararı bekliyor); yeni bağımsız örneklem C ile ölç
+- [x] Orchestration/Data sınırı için puanlama turu (Meriç "evet", 2026-10-02): mesajlaşma kanalları AI puanı vermez; IF/Switch/Merge/Wait ve dal bonusu puan vermez, Orchestration sinyali webhook/hata/alt workflow; ağırlıksız servis düğümü tip başına Data +2. `linkedin` anahtarı gerçek tip `linkedIn` ile hiç eşleşmiyordu (kaldırıldı).
+      Örneklem C (tohum 777, 3x8 sinyalli, bağımsız): 24/24. B'deki 6 hatanın 5'i düzeldi; kalan: AI'a HTTP ile giden workflow (Midjourney) kural tabanlı görülemez - README'de sınır olarak yazılacak. Dağılım: 1.106 Data / 793 AI / 148 Orchestration; güven: 1.906 high, 50 medium, 39 low, 52 none (önce 312). 52 test; yeni koda 9 bozma: 7 yakalandı, 1 ölü koşul (tetikleyici kontrolü) kaldırıldı, 1 liste içeriği.
 - [ ] Teklif Hazırlayıcı `AGENT.md`'deki çıktı yolunu yeni dosya adlarına güncelle (Meriç onayıyla)
 Bitti sayılır: gerçek veride hata yok, sayılar ve elle kontrol sonucu PROGRESS'te.
 
