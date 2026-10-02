@@ -81,10 +81,13 @@ Ek 2 (2026-10-03, Meriç "evet"): 9 yardımcı/demo düğüm tipi çekirdek list
 Ek 3 (2026-10-03, Meriç "evet"): audit öncesi kontrol iki bulgu çıkardı. (1) `vectorStore` ağırlık anahtarı gerçek tiplerle (`vectorStoreQdrant`...) hiç eşleşmiyordu -> önek eşleşmesi (`NODE_PREFIX_WEIGHTS`), senaryo 34, 3 test; 4 bozmanın 4'ü yakalandı. Tam veride 1.973 profilde kategori/ikincil/güven/etiket/servis/karmaşıklık birebir aynı, özet aynı; sadece puan ve gerekçe satırları değişti; 741.857 kelime. `analysis_version` 2.1.1. (2) CASE_STUDY test sayısı 62 -> 66 (bozma sayımı 54/50 + Ek 2'deki 2 + bu 4 = 60/56). `examples/` ve `output/zie619-ae8cf6dc/` yeniden üretildi.
 
 ## Faz 5 - Yayın
-- [ ] Temiz oturumda `security-audit` -> `security.md`
+- [x] Temiz oturumda `security-audit` -> `security.md`
+      2026-10-03: risk Medium; sır yok, geçmiş ve commit e-postaları temiz, `input/` `output/` `logs/` git dışı. 4 Medium (UTF-8 olmayan dosya adı çalıştırmayı çökertiyor; `summary.txt`'ye mutlak yol sızıyor; adlarda Markdown/HTML enjeksiyonu; aşağı akış LLM'e prompt injection), 6 Low. Düzeltme yapılmadı.
 - [ ] Temiz oturumda `optimize` -> `OPTIMIZATIONS.md`
-- [ ] Önemli bulguları düzelt, tüm testleri yeniden çalıştır
-- [ ] Commit e-postası GitHub noreply (repo-yerel `user.email`, ilk commit'ten önce)
+- [x] Önemli bulguları düzelt, tüm testleri yeniden çalıştır
+      2026-10-03 (Meriç "evet", `optimize`'dan önce): security.md'deki 10 bulgunun hepsi düzeltildi ya da azaltıldı (her birinde durum notu var). Metadata ```` ```yaml ```` bloğunda (Meriç seçimi), SHA-256, "untrusted data" notu, Markdown kaçışı, `unsafe_file_name` / `not_regular_file`, `O_NOFOLLOW`, `open("x")`, yolsuz hata satırı, tip/ad doğrulama, ince kayıtlar. `analysis_version` 2.2.0. 80 test (senaryo 35-43); 20 bozmanın 18'i yakalandı, 1'i eksik test (eklendi), 1'i eşdeğer. Tam veride 1.973 profilde sınıflandırma alanları ve yerleşim birebir aynı, `summary.txt` aynı, iki çalıştırma birebir aynı, ~11 sn; 741.917 kelime (`wc -w`). `examples/` yeniden üretildi (HEAD ile üretim yönteminin eski örnekleri birebir verdiği doğrulandı). `output/zie619-ae8cf6dc/` silinip 2.2.0 ile yeniden üretildi (Meriç "evet"); doğrulanan çalıştırmayla birebir aynı. `security.md` yerelde kalır, `.gitignore`'da (Meriç kararı: public repoda güvenlik zaafiyeti ayrıntısı olmasın).
+- [x] Commit e-postası GitHub noreply (repo-yerel `user.email`, ilk commit'ten önce)
+      2026-10-03 security-audit'te doğrulandı: 8 commit'in hepsinde yazar ve committer noreply.
 - [ ] GitHub repo adı kararı (Meriç), `v0.1.0` etiketi
 - [ ] Sadece Meriç'in açık "evet"inden sonra: GitHub reposu ve gönderim; CI'ın geçtiğini doğrula
 - [ ] Kanıt listesine ekleme sorusu (context.md "Public proof"), Meriç "evet" derse

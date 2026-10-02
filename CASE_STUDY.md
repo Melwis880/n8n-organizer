@@ -59,7 +59,7 @@ anything.
 | Skipped as "not a workflow" | 10 (`package.json`, `tsconfig.json`, API listings) |
 | Errors | 0 |
 | Run time | about 10 seconds |
-| Output | 3 files, 741,857 words; each under the 450,000-word NotebookLM limit |
+| Output | 3 files, 741,917 words; each under the 450,000-word NotebookLM limit |
 
 | Category | Workflows |
 |---|---|
@@ -130,10 +130,16 @@ found these bugs in it:
   All 97 workflows with a vector store already had an LLM step, so no category, secondary
   category or confidence changed; only scores and reason lines did.
 
-The test suite has 66 tests over 34 written scenarios (tests/SCENARIOS.md), all on synthetic
-fixtures. To check that the tests catch real faults, 60 deliberate bugs were planted in the
-code one at a time: 56 were caught. The exercise also found four missing tests (added) and two
+The test suite has 80 tests over 43 written scenarios (tests/SCENARIOS.md), all on synthetic
+fixtures. To check that the tests catch real faults, 80 deliberate bugs were planted in the
+code one at a time: 74 were caught. The exercise also found five missing tests (added) and two
 pieces of dead code (removed).
+
+A security review before publishing found that untrusted input could stop or bend a run: a
+file name with bytes that are not UTF-8 stopped the whole run, a FIFO made it wait forever, an
+unreadable file put the absolute local path into `summary.txt`, and names could add links,
+images or HTML to the Markdown. All are fixed and tested; on the full collection no category,
+confidence, tag or service changed.
 
 ## Takeaways
 

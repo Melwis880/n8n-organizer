@@ -119,14 +119,13 @@ class ServiceListTests(unittest.TestCase):
         self.assertEqual(score.scores[Category.ORCHESTRATION], 0)
         self.assertFalse(any(r.startswith("Three or more") for r in score.reasons))
 
-    def test_label_from_untrusted_type_is_one_clean_line(self):
+    def test_type_that_is_not_a_type_name_gives_no_service(self):
         metrics = extract_metrics(workflow("Evil", [
             node("A", "n8n-nodes-base.evil\nType\x1b[31m"),
-            node("B", "n8n-nodes-base."),
+            node("B", "n8n-nodes-base.https://secret.example/api?key=ABC"),
+            node("C", "n8n-nodes-base."),
         ]))
-        self.assertEqual(len(metrics.external_services), 1)
-        self.assertNotIn("\n", metrics.external_services[0])
-        self.assertNotIn("\x1b", metrics.external_services[0])
+        self.assertEqual(metrics.external_services, [])
 
 
 class TieTests(unittest.TestCase):

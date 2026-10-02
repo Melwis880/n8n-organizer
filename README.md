@@ -81,11 +81,13 @@ with `noOp` and broke connections (details in [CASE_STUDY.md](CASE_STUDY.md)).
 - **`summary.txt`**: files found, workflows analysed, unique, duplicates (exact / normalized),
   skipped files by reason, errors, output files.
 
-Each workflow profile starts with YAML front matter:
+Each workflow profile starts with its metadata in a ` ```yaml ` code block. It is a code block, not
+`---` front matter, because in the middle of a file a Markdown viewer would render front matter
+as text, links and HTML included:
 
 | Field | Content |
 |---|---|
-| `workflow_id`, `dedup_fingerprint` | SHA-1 of the workflow JSON and of its normalized form |
+| `workflow_id`, `dedup_fingerprint` | SHA-256 of the workflow JSON and of its normalized form |
 | `source_file` | Path relative to `--input`; never an absolute local path |
 | `workflow_name` | From the JSON, or the file name if it has none |
 | `primary_category`, `secondary_category` | See [Classification](#classification) |
@@ -97,13 +99,21 @@ Each workflow profile starts with YAML front matter:
 | `project_purpose`, `freelance_value`, `client_problem_type` | Short category-level text for scoping work |
 | `architectural_complexity` | `Low`, `Medium` or `High`, from nodes, branches, services, sub-workflows, error handling, AI |
 
-After the front matter come ten sections: summary, value, node inventory (name and type),
+After the metadata come ten sections: summary, value, node inventory (name and type),
 services, patterns, architecture notes, reusable insight, metrics, classification reasons and a
 short normalized node list.
 
 **What never reaches the output:** node parameters, credentials, URLs and sticky-note text.
 Workflows often carry API keys in parameters, so only names, types, counts and hashes are
-written.
+written. A workflow or node name that is not a string is ignored, and a node type that does not
+look like an n8n type name (letters, digits and `@ _ . / -` only) counts as no type, so neither
+can carry other content into the output.
+
+**Names are untrusted text.** Control characters and line breaks become spaces. In headings and
+lists, the characters that start a link, image, HTML tag or code span (`[`, `]`, `<`, `` ` `` and
+`\`) are escaped with a backslash; the metadata block keeps names exactly. Every
+category file opens with a note that names are copied from the source files and are data, not
+instructions, for LLM readers such as NotebookLM.
 
 ### Trace
 
@@ -111,7 +121,9 @@ Every run appends one JSON line per event to `<log-dir>/YYYY-MM-DD.jsonl`, linke
 and `seq`. Each file produces `found`, then `skipped` (with a reason) or `loaded` →
 `classified` (scores, hashes) → `duplicate` (with the kept file) or `placed` (output file). The
 run starts with `run_start` and ends with `written` per file and `run_end` with the totals. The
-trace holds paths, names, hashes and numbers, never workflow content.
+trace holds paths relative to `--input`, names, hashes and numbers, never workflow content;
+`run_start` records only the input and output folder names. `--log-dir` is relative to the
+current folder.
 
 ## Classification
 
@@ -167,16 +179,22 @@ All weights live in [`src/n8n_organizer/config.py`](src/n8n_organizer/config.py)
 ### Input handling and duplicates
 
 - Files are processed in sorted path order, so runs are reproducible.
-- Skipped, with the reason in the trace and `summary.txt`: symlinks (never followed),
-  files over 10 MB, files that are not valid UTF-8 (a BOM is fine), invalid JSON, and JSON that
-  is not a workflow (no top-level object with a `nodes` list, such as `package.json`).
+- Skipped, with the reason in the trace and `summary.txt`: symlinks (never followed, even if a
+  file is swapped for one during the run), special files such as FIFOs, files over 10 MB,
+  file or folder names with bytes that are not UTF-8, line breaks or control characters, files
+  that are not valid UTF-8 (a BOM is fine), invalid JSON, and JSON that is not a workflow (no
+  top-level object with a `nodes` list, such as `package.json`).
+- A file that cannot be read is counted as an error with the reason (for example "Permission
+  denied") and its relative path, never the absolute path.
 - Duplicates are found in two steps: same JSON content (key order and whitespace ignored), then
   same name, nodes and connections after ignoring node ids, positions, credentials, webhook ids,
   node order and node-name case. Workflow-level fields such as `id`, `tags` and `settings` are
   ignored in this step. The first file by path is kept; the trace records which file each
   duplicate matched.
 - The output folder must not be the input folder or inside it, so a later run never reads its
-  own output. The tool never deletes or overwrites a file.
+  own output. The tool never deletes or overwrites a file: each output file is created new,
+  and if one appears in the output folder during the run (a file or a symlink), the run stops
+  with a clear message instead of writing through it.
 
 ## Limits
 

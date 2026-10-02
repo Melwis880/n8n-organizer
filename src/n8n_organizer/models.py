@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
 
 
 class Category(str, Enum):
@@ -59,8 +58,10 @@ class WorkflowMetadata:
 @dataclass
 class WorkflowRecord:
     source_file: str
-    raw_data: dict[str, Any]
-    normalized_data: dict[str, Any]
+    # Only node names and types are kept, never the workflow JSON: nothing else can reach the
+    # output, and memory stays small however many workflows a run reads.
+    nodes: list[tuple[str, str]]  # working nodes (name, type) in workflow order
+    excerpt_nodes: list[tuple[str, str]]  # the same nodes in normalized order and naming
     raw_hash: str
     normalized_hash: str
     metrics: WorkflowMetrics

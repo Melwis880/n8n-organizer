@@ -31,10 +31,20 @@ LANGCHAIN_PREFIX = "@n8n/n8n-nodes-langchain."
 # LangChain nodes that call a model themselves (besides lm*, chain* and agent* nodes).
 LANGCHAIN_MODEL_NODES = {"openAi", "openAiAssistant", "informationExtractor", "textClassifier", "sentimentAnalysis"}
 
+# What an n8n node type looks like (n8n-nodes-base.googleSheets, @n8n/n8n-nodes-langchain.agent).
+# No spaces or colons, so a type can never carry a URL, a header or a sentence into the output.
+NODE_TYPE_PATTERN = re.compile(r"[@A-Za-z0-9_./-]{1,120}")
+
+
+def type_of(node: dict[str, Any]) -> str:
+    """The node's type when it looks like an n8n type name; anything else counts as no type."""
+    value = node.get("type")
+    return value if isinstance(value, str) and NODE_TYPE_PATTERN.fullmatch(value) else ""
+
 
 def working_nodes(data: dict[str, Any]) -> list[dict[str, Any]]:
     """Nodes that do work. Sticky notes are comments on the canvas, not steps."""
-    return [n for n in data.get("nodes", []) if str(n.get("type", "")) != STICKY_NOTE_TYPE]
+    return [n for n in data.get("nodes", []) if type_of(n) != STICKY_NOTE_TYPE]
 
 
 def is_trigger(node_type: str) -> bool:
@@ -130,7 +140,7 @@ def extract_metrics(data: dict[str, Any]) -> WorkflowMetrics:
     known_services = set()
     other_services = set()
     for node in nodes:
-        node_type = str(node.get("type", ""))
+        node_type = type_of(node)
         node_name = node.get("name")
 
         if is_trigger(node_type):
@@ -213,12 +223,12 @@ def classify_workflow(data: dict[str, Any]) -> tuple[WorkflowMetrics, WorkflowSc
     reasons: list[str] = []
 
     for node in nodes:
-        node_type = str(node.get("type", ""))
+        node_type = type_of(node)
         for category, value in node_weights(node_type).items():
             scores[category] += value
             reasons.append(f"{node_type} -> {category.value} +{value}")
 
-    node_types = {str(n.get("type", "")) for n in nodes}
+    node_types = {type_of(n) for n in nodes}
     for node_type in sorted(node_types):
         if is_unweighted_service(node_type):
             scores[Category.DATA_INTEGRATION] += SERVICE_NODE_WEIGHT

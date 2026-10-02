@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .classifier import classify_workflow, working_nodes
+from .classifier import classify_workflow, type_of, working_nodes
 from .config import MAX_FILE_BYTES, MAX_WORDS_PER_FILE
 from .deduper import deduplicate_records
 from .enricher import build_metadata
@@ -11,7 +11,7 @@ from .markdown_writer import write_category_markdowns
 from .models import RunResult, WorkflowRecord
 from .normalizer import normalize_workflow
 from .trace import Tracer
-from .utils import clean_text, sha1_json
+from .utils import clean_text, has_unsafe_chars, sha256_json, text_field, write_new_file
 
 
 class UsageError(Exception):
@@ -30,14 +30,17 @@ def check_locations(input_dir: Path, output_dir: Path) -> None:
 
 
 def build_record(path: Path, rel: str, data: dict) -> WorkflowRecord:
-    name = clean_text(data.get("name")) or clean_text(path.stem)
+    name = clean_text(text_field(data.get("name"))) or clean_text(path.stem)
     normalized = normalize_workflow(data)
-    raw_hash = sha1_json(data)
-    normalized_hash = sha1_json(normalized)
+    raw_hash = sha256_json(data)
+    normalized_hash = sha256_json(normalized)
     metrics, score = classify_workflow(data)
-    node_types = {str(n.get("type", "")) for n in working_nodes(data)}
+    working = working_nodes(data)
+    node_types = {type_of(n) for n in working}
     metadata = build_metadata(rel, name, raw_hash, normalized_hash, metrics, score, node_types)
-    return WorkflowRecord(rel, data, normalized, raw_hash, normalized_hash, metrics, score, metadata)
+    nodes = [(clean_text(text_field(n.get("name"))), type_of(n)) for n in working]
+    excerpt_nodes = [(clean_text(text_field(n.get("name"))), type_of(n)) for n in working_nodes(normalized)]
+    return WorkflowRecord(rel, nodes, excerpt_nodes, raw_hash, normalized_hash, metrics, score, metadata)
 
 
 def write_summary(output_dir: Path, result: RunResult) -> None:
@@ -55,7 +58,7 @@ def write_summary(output_dir: Path, result: RunResult) -> None:
         "Output files:",
         *[f"  {name}" for name in result.output_files],
     ]
-    (output_dir / "summary.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    write_new_file(output_dir / "summary.txt", "\n".join(lines) + "\n")
 
 
 def run(
@@ -67,7 +70,8 @@ def run(
 ) -> RunResult:
     tracer = tracer or Tracer(None)
     check_locations(input_dir, output_dir)
-    tracer.event("run_start", input=str(input_dir), output=str(output_dir))
+    # Folder names only: the trace never holds a local absolute path.
+    tracer.event("run_start", input=input_dir.resolve().name, output=output_dir.resolve().name)
 
     result = RunResult()
     records: list[WorkflowRecord] = []
@@ -76,6 +80,12 @@ def run(
         rel = path.relative_to(input_dir).as_posix()
         result.files_found += 1
         tracer.event("found", path=rel)
+        if has_unsafe_chars(rel):
+            # Bytes that are not UTF-8, line breaks or control characters in a file or folder name
+            # would break summary.txt and the Markdown, or stop the run when it is written.
+            result.skipped["unsafe_file_name"] = result.skipped.get("unsafe_file_name", 0) + 1
+            tracer.event("skipped", path=rel, reason="unsafe_file_name")
+            continue
         try:
             loaded = load_workflow_json(path, max_bytes=max_file_bytes)
             if loaded.skip_reason:
@@ -85,9 +95,10 @@ def run(
             tracer.event("loaded", path=rel)
             record = build_record(path, rel, loaded.data)
         except Exception as exc:  # one bad file must not stop the run
-            message = f"{rel}: {type(exc).__name__}: {clean_text(str(exc))}"
-            result.errors.append(message)
-            tracer.event("error", path=rel, error=type(exc).__name__, detail=clean_text(str(exc)))
+            # An OSError message carries the full path as given to --input; strerror does not.
+            detail = clean_text(exc.strerror if isinstance(exc, OSError) and exc.strerror else str(exc))
+            result.errors.append(f"{rel}: {type(exc).__name__}: {detail}")
+            tracer.event("error", path=rel, error=type(exc).__name__, detail=detail)
             continue
         records.append(record)
         tracer.event(
@@ -112,14 +123,17 @@ def run(
             result.duplicates_normalized += 1
         tracer.event("duplicate", path=dup.record.source_file, kept=dup.kept.source_file, kind=dup.kind)
 
-    written = write_category_markdowns(unique, output_dir, max_words=max_words)
-    for name, in_file in written.items():
-        for record in in_file:
-            tracer.event("placed", path=record.source_file, file=name)
-        tracer.event("written", file=name, workflows=len(in_file))
-    result.output_files = sorted(written)
-
-    write_summary(output_dir, result)
+    try:
+        written = write_category_markdowns(unique, output_dir, max_words=max_words)
+        for name, in_file in written.items():
+            for record in in_file:
+                tracer.event("placed", path=record.source_file, file=name)
+            tracer.event("written", file=name, workflows=len(in_file))
+        result.output_files = sorted(written)
+        write_summary(output_dir, result)
+    except FileExistsError as exc:
+        name = Path(exc.filename).name
+        raise UsageError(f"output file appeared during the run and was not overwritten: {name}") from None
     tracer.event(
         "run_end",
         files_found=result.files_found,
