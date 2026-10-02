@@ -6,9 +6,9 @@ from typing import Any
 
 
 class Category(str, Enum):
-    SEO_DATA = "SEO_Data_N8N"
-    AI_CONTENT = "AI_Content_N8N"
-    ARCH_SECURITY = "Architecture_Security_N8N"
+    DATA_INTEGRATION = "Data_Integration"
+    AI_CONTENT = "AI_Content"
+    ORCHESTRATION = "Orchestration_Reliability"
 
 
 @dataclass
@@ -19,7 +19,6 @@ class WorkflowMetrics:
     trigger_nodes: list[str] = field(default_factory=list)
     external_services: list[str] = field(default_factory=list)
     integration_count: int = 0
-    max_path_length: int = 0
     has_error_handling: bool = False
     has_subworkflow: bool = False
     has_ai_or_memory: bool = False
@@ -54,7 +53,7 @@ class WorkflowMetadata:
     external_services: list[str]
     key_patterns: list[str]
     dedup_fingerprint: str
-    analysis_version: str = "1.0.0"
+    analysis_version: str
 
 
 @dataclass
@@ -67,3 +66,15 @@ class WorkflowRecord:
     metrics: WorkflowMetrics
     score: WorkflowScore
     metadata: WorkflowMetadata
+
+
+@dataclass
+class RunResult:
+    files_found: int = 0
+    analysed: int = 0
+    unique: int = 0
+    duplicates_exact: int = 0
+    duplicates_normalized: int = 0
+    skipped: dict[str, int] = field(default_factory=dict)
+    errors: list[str] = field(default_factory=list)
+    output_files: list[str] = field(default_factory=list)

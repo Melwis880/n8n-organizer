@@ -1,0 +1,65 @@
+import io
+import json
+import os
+import unittest
+from collections import defaultdict
+
+from n8n_organizer.main import run
+from n8n_organizer.trace import Tracer
+
+from helpers import AI_WF, DATA_WF, TempDirTest, write_json
+
+
+class TraceTests(TempDirTest):
+    def events(self, tracer):
+        return [json.loads(line) for line in tracer.path.read_text().splitlines()]
+
+    def test_event_chain_per_file(self):
+        write_json(self.input / "a.json", AI_WF)
+        write_json(self.input / "b.json", AI_WF)
+        write_json(self.input / "c.json", ["not", "a", "workflow"])
+        tracer = Tracer(self.tmp / "logs")
+        run(self.input, self.output, tracer=tracer)
+        events = self.events(tracer)
+
+        self.assertEqual(events[0]["event"], "run_start")
+        self.assertEqual(events[-1]["event"], "run_end")
+        self.assertEqual([e["seq"] for e in events], list(range(1, len(events) + 1)))
+        self.assertEqual({e["run_id"] for e in events}, {tracer.run_id})
+
+        chain = defaultdict(list)
+        for e in events:
+            if "path" in e:
+                chain[e["path"]].append(e["event"])
+        self.assertEqual(chain["a.json"], ["found", "loaded", "classified", "placed"])
+        self.assertEqual(chain["b.json"], ["found", "loaded", "classified", "duplicate"])
+        self.assertEqual(chain["c.json"], ["found", "skipped"])
+
+    def test_no_workflow_content_in_trace(self):
+        write_json(self.input / "a.json", AI_WF)
+        tracer = Tracer(self.tmp / "logs")
+        run(self.input, self.output, tracer=tracer)
+        text = tracer.path.read_text()
+        self.assertNotIn("langchain.agent", text)
+        self.assertNotIn("parameters", text)
+
+    def test_debug_mirrors_to_stream(self):
+        write_json(self.input / "a.json", DATA_WF)
+        stream = io.StringIO()
+        tracer = Tracer(self.tmp / "logs", debug=True, stream=stream)
+        run(self.input, self.output, tracer=tracer)
+        self.assertEqual(stream.getvalue().splitlines(), tracer.path.read_text().splitlines())
+
+    @unittest.skipIf(hasattr(os, "geteuid") and os.geteuid() == 0, "root ignores permissions")
+    def test_unwritable_log_dir_warns_once_and_run_continues(self):
+        blocked = self.tmp / "blocked"
+        blocked.write_text("a file, not a folder")
+        write_json(self.input / "a.json", DATA_WF)
+        stream = io.StringIO()
+        result = run(self.input, self.output, tracer=Tracer(blocked / "logs", stream=stream))
+        self.assertEqual(result.analysed, 1)
+        self.assertEqual(stream.getvalue().count("cannot write trace"), 1)
+
+
+if __name__ == "__main__":
+    unittest.main()

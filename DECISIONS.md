@@ -22,6 +22,9 @@ Her satır: karar - neden. Bir karar değişecekse önce Meriç'e sorulur, sessi
 - Sticky Note düğümleri ölçümlere (düğüm sayısı, karmaşıklık) girmez - bunlar yorum, iş adımı değil.
 - Kategoriler: `Data_Integration`, `AI_Content`, `Orchestration_Reliability`; çıktı dosyası `<n>-<Category>.md` - "SEO" ve "Security" adları yanlış konumlandırıyordu (Meriç kararı, 2026-10-02).
 - Kategori dosyası kelime sınırı 450.000; aşınca `2-<Category>.md` açılır - NotebookLM kaynak sınırı.
+- `connection_count` gerçek kenar sayısıdır (tüm çıkış türleri: `main`, `ai_*`); eski kod çıkış yuvası sayıyordu - AI workflow'larının bağlantıları `ai_languageModel` gibi türlerde (Claude düzeltmesi, 2026-10-02).
+- Kategori eşitliğinde sabit sıra kazanır: Data_Integration, AI_Content, Orchestration_Reliability; hiçbir sinyal yoksa Data_Integration + `low` güven - deterministik kural (Claude, 2026-10-02).
+- Çıktı biçimi değiştiği için `analysis_version` 2.0.0 (Claude, 2026-10-02).
 
 ## Güvenlik ve erişim
 - Ağ erişimi yok; araç hiçbir JSON içeriğini çalıştırmaz, sadece veri olarak okur.
@@ -29,6 +32,7 @@ Her satır: karar - neden. Bir karar değişecekse önce Meriç'e sorulur, sessi
 - 10 MB'tan büyük JSON atlanır (trace'e neden yazılır) - bozuk ya da kötü niyetli dev dosya belleği doldurmasın.
 - Metin UTF-8 (BOM'lu da) okunur; çözülemeyen dosya atlanır - eski `errors="ignore"` veriyi sessizce bozuyordu.
 - Sadece `--output` altına yazar; çıktı klasörü girdi klasörünün içindeyse ya da aynıysa çalışmaz - bir sonraki taramada kendi çıktısını okumasın.
+- Çıktı klasörü boş olmalı ya da henüz olmamalı; doluysa araç çalışmaz, hiçbir dosyayı silmez ya da üzerine yazmaz - eski parçalı dosyalar (`2-...md`) yeni çıktıya karışmasın ve araç kullanıcı dosyasını silmesin (Claude önerisi, 2026-10-02; Meriç onayı bekliyor).
 - Çıktıya sadece düğüm adı ve tipi, servis adları, ölçümler, hash'ler girer; parametreler, credentials, sticky note metni ve URL'ler asla girmez - agent.md Kural 4, workflow'larda gömülü anahtar olabilir.
 - `source_file` girdi köküne göre göreli yazılır - makinedeki yerel yollar çıktıya sızmasın.
 - Workflow adları güvenilmeyen metin: YAML'a `safe_dump` ile, Markdown başlıklarına kontrol karakterleri ve satır sonları temizlenerek yazılır.

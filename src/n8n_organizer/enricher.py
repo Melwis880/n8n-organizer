@@ -1,30 +1,24 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 from .config import ANALYSIS_VERSION, CLIENT_PROBLEM_MAP
-from .models import WorkflowMetadata, WorkflowMetrics, WorkflowScore
+from .models import Category, WorkflowMetadata, WorkflowMetrics, WorkflowScore
+from .utils import clean_text
 
 
-def infer_project_purpose(data: dict, primary_category: str) -> str:
-    node_types = {n.get("type", "").lower() for n in data.get("nodes", [])}
+def infer_project_purpose(node_types: set[str], primary_category: str) -> str:
+    lowered = {t.lower() for t in node_types}
 
-    if "n8n-nodes-base.httpsrequest".lower() in node_types and "n8n-nodes-base.googlesheets".lower() in node_types:
-        return "Harici kaynaklardan veri çekip tabloya veya raporlama katmanına aktaran otomatik veri akışı."
-
-    if any("openai" in t for t in node_types):
-        return "AI destekli içerik üretimi, özetleme, sınıflandırma veya sohbet otomasyonu sağlayan akış."
-
-    if "n8n-nodes-base.webhook".lower() in node_types:
-        return "Harici sistemlerden gelen istekleri işleyip entegrasyon mantığı yürüten workflow."
-
-    if primary_category == "SEO_Data_N8N":
-        return "Veri toplama, veri dönüştürme ve raporlama amaçlı otomasyon akışı."
-
-    if primary_category == "AI_Content_N8N":
-        return "AI tabanlı içerik, chatbot veya bilgi işleme amaçlı otomasyon akışı."
-
-    return "Entegrasyon, orkestrasyon ve operasyonel süreç yönetimi amaçlı otomasyon akışı."
+    if "n8n-nodes-base.httprequest" in lowered and "n8n-nodes-base.googlesheets" in lowered:
+        return "Automated data flow that pulls data from external sources into a sheet or reporting layer."
+    if any("openai" in t for t in lowered):
+        return "AI-assisted flow for content generation, summarising, classification or chat."
+    if "n8n-nodes-base.webhook" in lowered:
+        return "Workflow that receives requests from external systems and runs integration logic."
+    if primary_category == Category.DATA_INTEGRATION.value:
+        return "Automation for collecting, transforming and reporting data."
+    if primary_category == Category.AI_CONTENT.value:
+        return "Automation for AI content, chatbots or information processing."
+    return "Automation for integration, orchestration and operational process management."
 
 
 def infer_complexity(metrics: WorkflowMetrics) -> str:
@@ -36,49 +30,48 @@ def infer_complexity(metrics: WorkflowMetrics) -> str:
         + metrics.integration_count * 1.5
         + (2 if metrics.has_ai_or_memory else 0)
     )
-
     if score <= 10:
-        return "Düşük"
+        return "Low"
     if score <= 24:
-        return "Orta"
-    return "Yüksek"
+        return "Medium"
+    return "High"
 
 
 def infer_freelance_value(primary_category: str) -> str:
-    if primary_category == "SEO_Data_N8N":
-        return "Otomatik raporlama, lead toplama, scraping ve veri senkronizasyonu ihtiyacı olan müşteriler için değerlidir."
-    if primary_category == "AI_Content_N8N":
-        return "AI içerik üretimi, chatbot, bilgi erişimi ve sosyal medya otomasyonu isteyen müşteriler için değerlidir."
-    return "Webhook entegrasyonu, hata toleransı, süreç orkestrasyonu ve operasyonel dayanıklılık isteyen müşteriler için değerlidir."
+    if primary_category == Category.DATA_INTEGRATION.value:
+        return "Useful for clients who need automated reporting, lead collection, scraping or data synchronisation."
+    if primary_category == Category.AI_CONTENT.value:
+        return "Useful for clients who want AI content generation, chatbots, knowledge access or social media automation."
+    return "Useful for clients who need webhook integrations, fault tolerance, process orchestration or operational resilience."
 
 
 def build_metadata(
-    source_file: Path,
+    source_file: str,
     workflow_name: str,
-    workflow_id: str,
+    raw_hash: str,
     normalized_hash: str,
     metrics: WorkflowMetrics,
     score: WorkflowScore,
-    data: dict,
+    node_types: set[str],
 ) -> WorkflowMetadata:
     primary = score.primary_category.value
     secondary = score.secondary_category.value if score.secondary_category else None
 
     return WorkflowMetadata(
-        workflow_id=workflow_id,
-        source_file=str(source_file),
-        workflow_name=workflow_name or source_file.stem,
+        workflow_id=raw_hash,
+        source_file=source_file,
+        workflow_name=workflow_name,
         primary_category=primary,
         secondary_category=secondary,
         category_confidence=score.confidence,
-        project_purpose=infer_project_purpose(data, primary),
+        project_purpose=infer_project_purpose(node_types, primary),
         architectural_complexity=infer_complexity(metrics),
         freelance_value=infer_freelance_value(primary),
-        client_problem_type=CLIENT_PROBLEM_MAP.get(primary, []),
+        client_problem_type=list(CLIENT_PROBLEM_MAP.get(primary, [])),
         node_count=metrics.node_count,
         connection_count=metrics.connection_count,
         branching_factor=metrics.branch_count,
-        trigger_nodes=metrics.trigger_nodes,
+        trigger_nodes=[clean_text(t) for t in metrics.trigger_nodes],
         external_services=metrics.external_services,
         key_patterns=score.key_patterns,
         dedup_fingerprint=normalized_hash,

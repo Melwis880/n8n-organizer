@@ -5,7 +5,8 @@ import sys
 from pathlib import Path
 
 from . import __version__
-from .main import run
+from .main import UsageError, run
+from .trace import Tracer
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -35,9 +36,17 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         if args.command == "build":
-            run(input_dir=args.input, output_dir=args.output)
+            tracer = Tracer(args.log_dir, debug=args.debug)
+            result = run(input_dir=args.input, output_dir=args.output, tracer=tracer)
+            print(
+                f"{result.unique} unique workflows written to {args.output} "
+                f"({result.analysed} analysed, {sum(result.skipped.values())} skipped, {len(result.errors)} errors)"
+            )
         elif args.command == "search":
             search(args.query)
+    except UsageError as exc:
+        print(f"n8n-organizer: {exc}", file=sys.stderr)
+        return 2
     except NotImplementedError as exc:
         print(f"n8n-organizer: {exc}", file=sys.stderr)
         return 2

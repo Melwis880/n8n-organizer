@@ -3,61 +3,77 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Any
 
-from .config import NODE_CATEGORY_WEIGHTS, SERVICE_NODE_HINTS, TRIGGER_NODE_TYPES
+from .config import NODE_CATEGORY_WEIGHTS, SERVICE_NODE_HINTS, STICKY_NOTE_TYPE, TRIGGER_NODE_TYPES
 from .models import Category, WorkflowMetrics, WorkflowScore
+
+BRANCH_TYPES = {
+    "n8n-nodes-base.if",
+    "n8n-nodes-base.switch",
+    "n8n-nodes-base.merge",
+}
+
+CATEGORY_ORDER = list(Category)
+
+
+def working_nodes(data: dict[str, Any]) -> list[dict[str, Any]]:
+    """Nodes that do work. Sticky notes are comments on the canvas, not steps."""
+    return [n for n in data.get("nodes", []) if str(n.get("type", "")) != STICKY_NOTE_TYPE]
+
+
+def is_trigger(node_type: str) -> bool:
+    return node_type in TRIGGER_NODE_TYPES or node_type.endswith("Trigger")
+
+
+def count_connections(connections: Any) -> int:
+    """Count edges: source node -> output type (main, ai_tool, ...) -> output slot -> target list."""
+    if not isinstance(connections, dict):
+        return 0
+    total = 0
+    for outputs in connections.values():
+        if not isinstance(outputs, dict):
+            continue
+        for slots in outputs.values():
+            if not isinstance(slots, list):
+                continue
+            for targets in slots:
+                if isinstance(targets, list):
+                    total += sum(1 for t in targets if isinstance(t, dict))
+    return total
 
 
 def extract_metrics(data: dict[str, Any]) -> WorkflowMetrics:
-    nodes = data.get("nodes", [])
-    connections = data.get("connections", {})
-
+    nodes = working_nodes(data)
     metrics = WorkflowMetrics()
     metrics.node_count = len(nodes)
-    metrics.connection_count = sum(len(v.get("main", [])) for v in connections.values() if isinstance(v, dict))
-
-    branch_types = {
-        "n8n-nodes-base.if",
-        "n8n-nodes-base.switch",
-        "n8n-nodes-base.merge",
-    }
+    metrics.connection_count = count_connections(data.get("connections"))
 
     service_names = set()
-
     for node in nodes:
-        node_type = node.get("type", "")
-        node_name = node.get("name", "")
+        node_type = str(node.get("type", ""))
+        node_name = node.get("name")
 
-        if node_type in TRIGGER_NODE_TYPES:
-            metrics.trigger_nodes.append(node_name or node_type)
-
-        if node_type in branch_types:
+        if is_trigger(node_type):
+            metrics.trigger_nodes.append(node_name if isinstance(node_name, str) and node_name else node_type)
+        if node_type in BRANCH_TYPES:
             metrics.branch_count += 1
-
         if node_type == "n8n-nodes-base.errorTrigger":
             metrics.has_error_handling = True
-
         if node_type == "n8n-nodes-base.executeWorkflow":
             metrics.has_subworkflow = True
-
-        if "openAi" in node_type or "langchain" in node_type or "vector" in node_type.lower():
+        if "openai" in node_type.lower() or "langchain" in node_type.lower() or "vector" in node_type.lower():
             metrics.has_ai_or_memory = True
-
         for hint, label in SERVICE_NODE_HINTS.items():
             if hint.lower() in node_type.lower():
                 service_names.add(label)
 
+    metrics.trigger_nodes.sort()
     metrics.external_services = sorted(service_names)
     metrics.integration_count = len(metrics.external_services)
-    metrics.max_path_length = metrics.node_count  # placeholder, later graph analysis can improve this
-
     return metrics
 
 
-def detect_patterns(data: dict[str, Any]) -> tuple[dict[Category, int], list[str], list[str]]:
-    nodes = data.get("nodes", [])
-    node_types = {n.get("type", "") for n in nodes}
-
-    bonus = defaultdict(int)
+def detect_patterns(node_types: set[str]) -> tuple[dict[Category, int], list[str], list[str]]:
+    bonus: dict[Category, int] = defaultdict(int)
     patterns: list[str] = []
     reasons: list[str] = []
 
@@ -65,85 +81,81 @@ def detect_patterns(data: dict[str, Any]) -> tuple[dict[Category, int], list[str
         return all(t in node_types for t in types)
 
     if has("n8n-nodes-base.httpRequest", "n8n-nodes-base.googleSheets"):
-        bonus[Category.SEO_DATA] += 6
+        bonus[Category.DATA_INTEGRATION] += 6
         patterns.append("reporting_pipeline")
-        reasons.append("HTTP Request + Google Sheets tespit edildi")
+        reasons.append("HTTP Request + Google Sheets found -> Data_Integration +6")
 
     if "n8n-nodes-base.httpRequest" in node_types:
-        bonus[Category.SEO_DATA] += 2
+        bonus[Category.DATA_INTEGRATION] += 2
         patterns.append("api_ingestion")
+        reasons.append("HTTP Request found -> Data_Integration +2")
 
     if has("n8n-nodes-base.webhook", "n8n-nodes-base.respondToWebhook"):
-        bonus[Category.ARCH_SECURITY] += 6
+        bonus[Category.ORCHESTRATION] += 6
         patterns.append("webhook_request_lifecycle")
-        reasons.append("Webhook request lifecycle pattern tespit edildi")
+        reasons.append("Webhook request/response lifecycle found -> Orchestration_Reliability +6")
 
     if "n8n-nodes-base.errorTrigger" in node_types:
-        bonus[Category.ARCH_SECURITY] += 5
+        bonus[Category.ORCHESTRATION] += 5
         patterns.append("error_handling")
-        reasons.append("Error handling node tespit edildi")
+        reasons.append("Error Trigger found -> Orchestration_Reliability +5")
 
     if any("openai" in t.lower() for t in node_types):
         bonus[Category.AI_CONTENT] += 4
         patterns.append("ai_generation")
-        reasons.append("OpenAI tabanlı node bulundu")
+        reasons.append("OpenAI node found -> AI_Content +4")
 
     if any("langchain" in t.lower() for t in node_types):
         bonus[Category.AI_CONTENT] += 5
         patterns.append("agentic_ai")
-        reasons.append("LangChain tabanlı node bulundu")
+        reasons.append("LangChain node found -> AI_Content +5")
 
     if any("vector" in t.lower() for t in node_types):
         bonus[Category.AI_CONTENT] += 4
         patterns.append("rag_or_vector_memory")
-        reasons.append("Vector store / memory pattern bulundu")
+        reasons.append("Vector store / memory node found -> AI_Content +4")
 
     return dict(bonus), patterns, reasons
 
 
 def classify_workflow(data: dict[str, Any]) -> tuple[WorkflowMetrics, WorkflowScore]:
     metrics = extract_metrics(data)
+    nodes = working_nodes(data)
 
-    scores = defaultdict(int)
+    scores: dict[Category, int] = {category: 0 for category in Category}
     reasons: list[str] = []
 
-    for node in data.get("nodes", []):
-        node_type = node.get("type", "")
-        weight_map = NODE_CATEGORY_WEIGHTS.get(node_type, {})
-        for category, value in weight_map.items():
+    for node in nodes:
+        node_type = str(node.get("type", ""))
+        for category, value in NODE_CATEGORY_WEIGHTS.get(node_type, {}).items():
             scores[category] += value
             reasons.append(f"{node_type} -> {category.value} +{value}")
 
-    pattern_bonus, patterns, pattern_reasons = detect_patterns(data)
-    for category, bonus in pattern_bonus.items():
-        scores[category] += bonus
-
+    pattern_bonus, patterns, pattern_reasons = detect_patterns({str(n.get("type", "")) for n in nodes})
+    for category, value in pattern_bonus.items():
+        scores[category] += value
     reasons.extend(pattern_reasons)
 
     if metrics.branch_count >= 2:
-        scores[Category.ARCH_SECURITY] += 2
-        reasons.append("Yoğun branching tespit edildi -> Architecture_Security_N8N +2")
+        scores[Category.ORCHESTRATION] += 2
+        reasons.append("Two or more branch nodes -> Orchestration_Reliability +2")
 
     if metrics.has_ai_or_memory:
         scores[Category.AI_CONTENT] += 2
-        reasons.append("AI/memory sinyali bulundu -> AI_Content_N8N +2")
+        reasons.append("AI or memory signal -> AI_Content +2")
 
     if metrics.integration_count >= 3:
-        scores[Category.SEO_DATA] += 1
-        scores[Category.ARCH_SECURITY] += 1
-        reasons.append("Çoklu entegrasyon yüzeyi tespit edildi")
+        scores[Category.DATA_INTEGRATION] += 1
+        scores[Category.ORCHESTRATION] += 1
+        reasons.append("Three or more external services -> Data_Integration +1, Orchestration_Reliability +1")
 
-    for category in Category:
-        scores[category] += 0
+    # Ties break by the fixed category order, so the same input always gives the same result.
+    ranked = sorted(scores.items(), key=lambda x: (-x[1], CATEGORY_ORDER.index(x[0])))
+    primary, top_score = ranked[0]
+    second, second_score = ranked[1]
+    secondary = second if second_score > 0 else None
 
-    ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-    primary = ranked[0][0]
-    secondary = ranked[1][0] if len(ranked) > 1 and ranked[1][1] > 0 else None
-
-    top_score = ranked[0][1]
-    second_score = ranked[1][1] if len(ranked) > 1 else 0
     delta_ratio = (top_score - second_score) / max(top_score, 1)
-
     if delta_ratio > 0.40:
         confidence = "high"
     elif delta_ratio > 0.20:
@@ -151,13 +163,11 @@ def classify_workflow(data: dict[str, Any]) -> tuple[WorkflowMetrics, WorkflowSc
     else:
         confidence = "low"
 
-    score = WorkflowScore(
-        scores=dict(scores),
+    return metrics, WorkflowScore(
+        scores=scores,
         primary_category=primary,
         secondary_category=secondary,
         confidence=confidence,
         reasons=reasons,
         key_patterns=patterns,
     )
-
-    return metrics, score

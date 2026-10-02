@@ -17,8 +17,8 @@ Not: kurulum `pip install -e .`; `--log-dir`/`--debug` bayrakları var, trace Fa
 **Faz 0 tamam (2026-10-02): 2 test geçiyor; taşınan kod tam veride eski sonucu birebir verdi (2.072 / 2.037 tekil / 35 tekrar / 5 hata).**
 
 ## Faz 1 - Trace ve senaryolar
-- [ ] JSONL trace (`run_id` + `seq`, olay türleri DECISIONS'taki gibi), `--debug` ile stderr
-- [ ] `tests/SCENARIOS.md` ve her biri için otomatik test:
+- [x] JSONL trace (`run_id` + `seq`, olay türleri DECISIONS'taki gibi), `--debug` ile stderr
+- [x] `tests/SCENARIOS.md` ve her biri için otomatik test:
       1. Normal klasör: workflow'lar kategorilere yazılır
       2. Boş klasör: çökmeden boş özet
       3. Bozuk JSON: atlanır, neden trace'te
@@ -39,12 +39,17 @@ Not: kurulum `pip install -e .`; `--log-dir`/`--debug` bayrakları var, trace Fa
       18. Trace'te workflow içeriği yok; her dosya için beklenen olay zinciri var
       19. `search` -> net "henüz yok" hatası
 Bitti sayılır: tüm senaryolar testte geçiyor; kasıtlı bozmaların hepsi yakalanıyor; bir çalıştırmanın trace'i beklenen yolu gösteriyor.
+Not: senaryolar 20-23 sonradan eklendi (kenar sayımı, sıralı dosya düzeni, eşitlik kuralı, metin temizliği).
+**Faz 1 tamam (2026-10-02): 41 test geçiyor; 32 kasıtlı bozmanın 31'i yakalandı, kalan 1'i eşdeğer (skor sözlüğü zaten kategori sırasıyla kuruluyor). Bozmalar 3 eksik test ve 1 ölü kod (backtick kaçışı: JSON satırları çit kapatamaz) buldu, düzeltildi.**
 
 ## Faz 2 - Düzeltmeler ve İngilizce çıktı
-- [ ] Workflow olmayan JSON ayrımı, tetikleyici tespiti, iki adımlı tekrar tespiti, sıralı işleme
-- [ ] Yeni kategori adları; tüm çıktı metni İngilizce (`CLIENT_PROBLEM_MAP`, açıklamalar, başlıklar)
-- [ ] Güvenlik kuralları: boyut sınırı, sembolik bağ, UTF-8, çıktı klasörü kontrolü, göreli `source_file`, ad temizliği
+- [x] Workflow olmayan JSON ayrımı, tetikleyici tespiti, iki adımlı tekrar tespiti, sıralı işleme
+- [x] Yeni kategori adları; tüm çıktı metni İngilizce (`CLIENT_PROBLEM_MAP`, açıklamalar, başlıklar)
+- [x] Güvenlik kuralları: boyut sınırı, sembolik bağ, UTF-8, çıktı klasörü kontrolü, göreli `source_file`, ad temizliği
 Bitti sayılır: tüm test takımı geçiyor; her değişiklikten sonra tüm takım yeniden çalıştı.
+Ek düzeltmeler: kapanmayan ```` ```json ```` çiti (ilk workflow'dan sonra her şey kod bloğundaydı), `enricher` `httpsrequest` yazım hatası, `connection_count` artık gerçek kenar sayısı, `traceback` yerine trace + özet. Çıktı klasörü boş olmalı (DECISIONS, Meriç onayı bekliyor).
+Tam veri (2026-10-02, ~6 sn): 2.077 dosya, 2.066 workflow, 2.034 tekil, 32 tekrar (1 birebir, 31 normalize), 11 "workflow değil" (package.json, tsconfig, API listeleri), 0 hata. İki çalıştırma birebir aynı. Eski sonuçla fark: eskiden 6 workflow-olmayan dosya boş workflow sayılıyordu (2.072 -> 2.066; tekrarların 3'ü bunlardı).
+**Faz 2 tamam (2026-10-02).**
 
 ## Faz 3 - Gerçek veri
 - [ ] Tam Zie619 koleksiyonunda çalıştır (eski: 2.072 dosya, 2.037 tekil, 35 tekrar, 5 "hata"); farkları açıkla

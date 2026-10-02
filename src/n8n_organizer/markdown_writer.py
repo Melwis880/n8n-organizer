@@ -1,276 +1,156 @@
 from __future__ import annotations
 
-from dataclasses import asdict
-from pathlib import Path
 import json
+from dataclasses import asdict
+from pathlib import Path, PurePosixPath
+
 import yaml
 
+from .classifier import working_nodes
 from .config import MAX_WORDS_PER_FILE
 from .models import Category, WorkflowRecord
-from .utils import get_word_count
+from .utils import clean_text, get_word_count
 
 
 def _yaml_block(metadata: dict) -> str:
-    return yaml.safe_dump(
-        metadata,
-        allow_unicode=True,
-        sort_keys=False,
-        default_flow_style=False,
-    ).strip()
+    return yaml.safe_dump(metadata, allow_unicode=True, sort_keys=False, default_flow_style=False).strip()
 
 
 def _format_node_inventory(record: WorkflowRecord) -> str:
-    nodes = record.raw_data.get("nodes", [])
+    nodes = working_nodes(record.raw_data)
     if not nodes:
         return "- No nodes found"
-
     return "\n".join(
-        f"- {node.get('name', 'Unnamed')} ({node.get('type', 'Unknown')})"
+        f"- {clean_text(node.get('name')) or 'Unnamed'} ({clean_text(node.get('type')) or 'Unknown'})"
         for node in nodes
     )
 
 
-def _format_patterns(record: WorkflowRecord) -> str:
-    if not getattr(record.score, "key_patterns", None):
-        return "- none"
-
-    return "\n".join(f"- {pattern}" for pattern in record.score.key_patterns)
+def _bullets(items: list[str], empty: str) -> str:
+    return "\n".join(f"- {clean_text(item, 300)}" for item in items) if items else f"- {empty}"
 
 
-def _format_reasons(record: WorkflowRecord, limit: int = 20) -> str:
-    reasons = getattr(record.score, "reasons", [])[:limit]
-    if not reasons:
-        return "- No classification reasons recorded"
-
-    return "\n".join(f"- {reason}" for reason in reasons)
-
-
-def _build_normalized_excerpt(record: WorkflowRecord, max_nodes: int = 15) -> dict:
-    return {
-        "name": record.normalized_data.get("name", ""),
-        "nodes": [
-            {
-                "name": node.get("name"),
-                "type": node.get("type"),
-            }
-            for node in record.normalized_data.get("nodes", [])[:max_nodes]
-        ],
+def _normalized_excerpt(record: WorkflowRecord, max_nodes: int = 15) -> str:
+    nodes = [n for n in record.normalized_data.get("nodes", []) if str(n.get("type", "")) != "n8n-nodes-base.stickyNote"]
+    excerpt = {
+        "name": clean_text(record.normalized_data.get("name", "")),
+        "nodes": [{"name": clean_text(n.get("name")), "type": clean_text(n.get("type"))} for n in nodes[:max_nodes]],
     }
+    # indent=2 starts every line with a space or a brace, so no line can close the code fence.
+    return json.dumps(excerpt, ensure_ascii=False, indent=2)
 
 
-def _get_repo_name(record: WorkflowRecord) -> str:
-    source_path = Path(record.source_file)
-
-    parts = source_path.parts
-    if len(parts) >= 2:
-        return parts[-2]
-
-    return source_path.stem
+def folder_name(record: WorkflowRecord) -> str:
+    parent = PurePosixPath(record.source_file).parent.name
+    return parent or "(root)"
 
 
-def _workflow_to_markdown(record: WorkflowRecord) -> str:
-    metadata_yaml = _yaml_block(asdict(record.metadata))
-    node_inventory = _format_node_inventory(record)
-    pattern_lines = _format_patterns(record)
-    reasons_lines = _format_reasons(record)
-    normalized_excerpt = _build_normalized_excerpt(record)
-
-    integration_surface = (
-        ", ".join(record.metadata.external_services)
-        if record.metadata.external_services
-        else "Bilinmiyor"
-    )
-
-    client_problem_types = (
-        ", ".join(record.metadata.client_problem_type)
-        if record.metadata.client_problem_type
-        else "Bilinmiyor"
-    )
-
-    normalized_json = json.dumps(
-        normalized_excerpt,
-        ensure_ascii=False,
-        indent=2,
-    )
+def workflow_to_markdown(record: WorkflowRecord) -> str:
+    m = record.metadata
+    services = ", ".join(m.external_services) if m.external_services else "None detected"
+    problems = ", ".join(m.client_problem_type) if m.client_problem_type else "None"
 
     return f"""---
-{metadata_yaml}
+{_yaml_block(asdict(m))}
 ---
 
-# Workflow: {record.metadata.workflow_name}
+# Workflow: {m.workflow_name}
 
 ## 1. Executive Summary
-{record.metadata.project_purpose}
+{m.project_purpose}
 
 ## 2. Why This Matters
-{record.metadata.freelance_value}
+{m.freelance_value}
 
 ## 3. Node Inventory
-{node_inventory}
+{_format_node_inventory(record)}
 
 ## 4. Integration Surface
-{integration_surface}
+{services}
 
 ## 5. Detected Patterns
-{pattern_lines}
+{_bullets(m.key_patterns, "none")}
 
 ## 6. Architecture Notes
-Ana kategori: **{record.metadata.primary_category}**  
-İkincil kategori: **{record.metadata.secondary_category or "Yok"}**  
-Karmaşıklık: **{record.metadata.architectural_complexity}**
+Primary category: **{m.primary_category}**  
+Secondary category: **{m.secondary_category or "None"}**  
+Complexity: **{m.architectural_complexity}**
 
-## 7. Reusable Freelancer Insight
-Bu akış özellikle şu müşteri problemlerine örnek olabilir: {client_problem_types}
+## 7. Reusable Insight
+Client problems this pattern can answer: {problems}
 
-## 8. Raw Workflow Summary
-- Node count: {record.metadata.node_count}
-- Connection count: {record.metadata.connection_count}
-- Branching factor: {record.metadata.branching_factor}
-- Confidence: {record.metadata.category_confidence}
+## 8. Workflow Metrics
+- Node count: {m.node_count}
+- Connection count: {m.connection_count}
+- Branching factor: {m.branching_factor}
+- Confidence: {m.category_confidence}
 
 ## 9. Classification Reasons
-{reasons_lines}
+{_bullets(record.score.reasons[:20], "No classification reasons recorded")}
 
 ## 10. Normalized JSON Excerpt
 ```json
-{normalized_json}
-
+{_normalized_excerpt(record)}
+```
 """
 
-def _repo_section_to_markdown(repo_name: str, records: list[WorkflowRecord]) -> str:
-    records = sorted(
-    records,
-    key=lambda record: (record.metadata.workflow_name or "").lower(),
-)
-    parts: list[str] = [
-    "",
-    "---",
-    "",
-    f"# REPO: {repo_name}",
-    "",
-    f"Bu repo içindeki analiz edilen workflow sayısı: {len(records)}",
-    "",
-    "---",
-    "",
-]
 
-    for record in records:
-        parts.append(_workflow_to_markdown(record))
-    
-
+def _folder_section(name: str, records: list[WorkflowRecord]) -> str:
+    records = sorted(records, key=lambda r: (r.metadata.workflow_name.lower(), r.source_file))
+    parts = ["---", "", f"# Folder: {clean_text(name)}", "", f"Workflows analysed in this folder: {len(records)}", ""]
+    parts.extend(workflow_to_markdown(r) for r in records)
     return "\n".join(parts)
 
 
-def _write_chunk_file(
-output_dir: Path,
-category_name: str,
-chunk_index: int,
-content_parts: list[str],
-) -> None:
-    output_path = output_dir / f"{chunk_index}-{category_name}.md"
-    output_path.write_text(
-    "\n".join(content_parts).strip() + "\n",
-    encoding="utf-8",   
-    )
+def _file_header(category: str, max_words: int) -> str:
+    return f"# {category}\n\nCombined NotebookLM source file.\nWord limit per file: {max_words}\n"
 
-def write_category_markdowns(records: list[WorkflowRecord], output_dir: Path) -> None:
-    """
-    Write large category-level Markdown files.
 
-    Instead of writing one Markdown file per repo, this function groups analyses
-    by category and keeps appending repo sections until MAX_WORDS_PER_FILE is reached.
-    Then it creates chunked files like:
+def write_category_markdowns(
+    records: list[WorkflowRecord],
+    output_dir: Path,
+    max_words: int = MAX_WORDS_PER_FILE,
+) -> dict[str, list[WorkflowRecord]]:
+    """Write one large file per category, starting a new numbered file when the word limit would be passed.
 
-    1-AI_Content_N8N.md
-    2-AI_Content_N8N.md
-    1-SEO_Data_N8N.md
+    Returns {output file name: records written to it}.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
+    written: dict[str, list[WorkflowRecord]] = {}
 
-    grouped_by_category: dict[str, list[WorkflowRecord]] = {
-        Category.SEO_DATA.value: [],
-        Category.AI_CONTENT.value: [],
-        Category.ARCH_SECURITY.value: [],
-    }
-
-    # HATA BURADAYDI: 'reload' yerine 'records' yapıldı ve girintiler düzeltildi.
-    for record in records:
-        category = record.metadata.primary_category
-
-        if category not in grouped_by_category:
-            grouped_by_category[category] = []
-
-        grouped_by_category[category].append(record)
-
-    for category_name, category_records in grouped_by_category.items():
+    for category in Category:
+        category_records = [r for r in records if r.metadata.primary_category == category.value]
         if not category_records:
             continue
 
-        grouped_by_repo: dict[str, list[WorkflowRecord]] = {}
-
+        by_folder: dict[str, list[WorkflowRecord]] = {}
         for record in category_records:
-            repo_name = _get_repo_name(record)
+            by_folder.setdefault(folder_name(record), []).append(record)
 
-            if repo_name not in grouped_by_repo:
-                grouped_by_repo[repo_name] = []
+        header = _file_header(category.value, max_words)
+        index = 1
+        parts: list[str] = [header]
+        words = get_word_count(header)
+        in_file: list[WorkflowRecord] = []
 
-            grouped_by_repo[repo_name].append(record)
+        def flush() -> None:
+            name = f"{index}-{category.value}.md"
+            (output_dir / name).write_text("\n".join(parts).rstrip() + "\n", encoding="utf-8")
+            written[name] = list(in_file)
 
-        chunk_index = 1
-        current_word_count = 0
+        for folder in sorted(by_folder):
+            section = _folder_section(folder, by_folder[folder])
+            section_words = get_word_count(section)
+            if in_file and words + section_words > max_words:
+                flush()
+                index += 1
+                parts = [header]
+                words = get_word_count(header)
+                in_file = []
+            parts.append(section)
+            words += section_words
+            in_file.extend(by_folder[folder])
 
-        current_parts: list[str] = [
-            f"# {category_name}",
-            "",
-            f"NotebookLM birleşik kaynak dosyası.",
-            f"Kelime sınırı: {MAX_WORDS_PER_FILE}",
-            "",
-            "---",
-            "",
-        ]
+        flush()
 
-        current_word_count = get_word_count("\n".join(current_parts))
-
-        for repo_name in sorted(grouped_by_repo.keys()):
-            repo_section = _repo_section_to_markdown(
-                repo_name=repo_name,
-                records=grouped_by_repo[repo_name],
-            )
-
-            repo_word_count = get_word_count(repo_section)
-
-            if (
-                current_word_count + repo_word_count > MAX_WORDS_PER_FILE
-                and len(current_parts) > 6
-            ):
-                _write_chunk_file(
-                    output_dir=output_dir,
-                    category_name=category_name,
-                    chunk_index=chunk_index,
-                    content_parts=current_parts,
-                )
-
-                chunk_index += 1
-
-                current_parts = [
-                    f"# {category_name}",
-                    "",
-                    f"NotebookLM birleşik kaynak dosyası.",
-                    f"Kelime sınırı: {MAX_WORDS_PER_FILE}",
-                    "",
-                    "---",
-                    "",
-                ]
-
-                current_word_count = get_word_count("\n".join(current_parts))
-
-            current_parts.append(repo_section)
-            current_word_count += repo_word_count
-
-        if len(current_parts) > 6:
-            _write_chunk_file(
-                output_dir=output_dir,
-                category_name=category_name,
-                chunk_index=chunk_index,
-                content_parts=current_parts,
-            )
+    return written

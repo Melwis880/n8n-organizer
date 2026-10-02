@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from pathlib import Path
+import unicodedata
 from typing import Any
 
 
@@ -15,17 +15,18 @@ def sha1_json(data: Any) -> str:
     return sha1_text(json.dumps(data, ensure_ascii=False, sort_keys=True))
 
 
-def safe_read_text(path: Path) -> str:
-    return path.read_text(encoding="utf-8", errors="ignore")
-
-
 def get_word_count(text: str) -> int:
-    """
-    Approximate word count for Markdown/JSON-like text.
-    Works well enough for NotebookLM source-size splitting.
-    """
+    """Approximate word count, good enough for NotebookLM source-size splitting."""
     if not text:
         return 0
+    return len(re.findall(r"\b[\w'-]+\b", text, flags=re.UNICODE))
 
-    words = re.findall(r"\b[\w'-]+\b", text, flags=re.UNICODE)
-    return len(words)
+
+def clean_text(value: Any, max_len: int = 200) -> str:
+    """Make untrusted text safe for one Markdown line: no control, format or bidi characters, no newlines."""
+    text = value if isinstance(value, str) else ("" if value is None else str(value))
+    text = "".join(" " if unicodedata.category(ch) in ("Cc", "Cf", "Zl", "Zp") else ch for ch in text)
+    text = " ".join(text.split())
+    if len(text) > max_len:
+        text = text[: max_len - 3].rstrip() + "..."
+    return text
