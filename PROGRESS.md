@@ -1,7 +1,7 @@
 # PROGRESS - n8n_organizer_tool (n8n workflow kütüphanesini bilgi tabanına çeviren araç)
 
 Amaç: Mevcut ~900 satırlık hattı test edilmiş, izlenebilir, İngilizce bir public repo olarak
-yayınlamak (kanıt #2). Kararlar: DECISIONS.md.
+yayınlamak (portföy kanıtı). Kararlar: DECISIONS.md.
 
 Durum: [ ] yapılacak, [x] bitti
 
@@ -60,8 +60,8 @@ Tam veri (2026-10-02, ~6 sn): 2.077 dosya, 2.066 workflow, 2.034 tekil, 32 tekra
       Örneklem B (tohum 2026, 3x8, bağımsız): sinyalli 20'nin 14'ü doğru (%70); AI_Content 7/8, Data 3/4 (+4 sinyalsiz), Orchestration 4/8. Kalan hatalar: Slack/Telegram düğümü AI puanı veriyor; IF/Merge gibi genel akış düğümleri Orchestration'a çekiyor; çoğu servis düğümünün (Drive, Spotify, QuickBooks, Todoist) Data ağırlığı yok. Dağılım: 796 AI / 810 Data / 367 Orchestration; güven: 1.456 high, 131 medium, 74 low, 312 none.
 - [x] Orchestration/Data sınırı için puanlama turu (Meriç "evet", 2026-10-02): mesajlaşma kanalları AI puanı vermez; IF/Switch/Merge/Wait ve dal bonusu puan vermez, Orchestration sinyali webhook/hata/alt workflow; ağırlıksız servis düğümü tip başına Data +2. `linkedin` anahtarı gerçek tip `linkedIn` ile hiç eşleşmiyordu (kaldırıldı).
       Örneklem C (tohum 777, 3x8 sinyalli, bağımsız): 24/24. B'deki 6 hatanın 5'i düzeldi; kalan: AI'a HTTP ile giden workflow (Midjourney) kural tabanlı görülemez - README'de sınır olarak yazılacak. Dağılım: 1.106 Data / 793 AI / 148 Orchestration; güven: 1.906 high, 50 medium, 39 low, 52 none (önce 312). 52 test; yeni koda 9 bozma: 7 yakalandı, 1 ölü koşul (tetikleyici kontrolü) kaldırıldı, 1 liste içeriği.
-- [x] Teklif Hazırlayıcı `AGENT.md`'deki çıktı yolunu yeni dosya adlarına güncelle (Meriç onayıyla)
-      2026-10-02 (Meriç "evet"): çıktı `output/zie619-ae8cf6dc/` altına üretildi (eski Türkçe `output/*.md` yerinde duruyor, silme ayrı onay); AGENT.md'deki arşiv satırı temiz sürüme ve yeni çıktıya bakıyor. Aynı yolları anlatan skill dosyaları ve context.md için öneri Meriç onayı bekliyor.
+- [x] Aşağı akıştaki teklif ajanının talimat dosyasındaki çıktı yolunu yeni dosya adlarına güncelle (Meriç onayıyla)
+      2026-10-02 (Meriç "evet"): çıktı `output/zie619-ae8cf6dc/` altına üretildi (eski Türkçe `output/*.md` yerinde duruyor, silme ayrı onay); ajanın talimat dosyasındaki arşiv satırı temiz sürüme ve yeni çıktıya bakıyor. Aynı yolları anlatan diğer yerel notlar için öneri Meriç onayı bekliyor.
 Bitti sayılır: gerçek veride hata yok, sayılar ve elle kontrol sonucu PROGRESS'te.
 **Faz 3 tamam (2026-10-02).**
 
@@ -90,7 +90,10 @@ Ek 3 (2026-10-03, Meriç "evet"): audit öncesi kontrol iki bulgu çıkardı. (1
       2026-10-03 (Meriç "evet", `optimize`'dan önce): security.md'deki 10 bulgunun hepsi düzeltildi ya da azaltıldı (her birinde durum notu var). Metadata ```` ```yaml ```` bloğunda (Meriç seçimi), SHA-256, "untrusted data" notu, Markdown kaçışı, `unsafe_file_name` / `not_regular_file`, `O_NOFOLLOW`, `open("x")`, yolsuz hata satırı, tip/ad doğrulama, ince kayıtlar. `analysis_version` 2.2.0. 80 test (senaryo 35-43); 20 bozmanın 18'i yakalandı, 1'i eksik test (eklendi), 1'i eşdeğer. Tam veride 1.973 profilde sınıflandırma alanları ve yerleşim birebir aynı, `summary.txt` aynı, iki çalıştırma birebir aynı, ~11 sn; 741.917 kelime (`wc -w`). `examples/` yeniden üretildi (HEAD ile üretim yönteminin eski örnekleri birebir verdiği doğrulandı). `output/zie619-ae8cf6dc/` silinip 2.2.0 ile yeniden üretildi (Meriç "evet"); doğrulanan çalıştırmayla birebir aynı. `security.md` yerelde kalır, `.gitignore`'da (Meriç kararı: public repoda güvenlik zaafiyeti ayrıntısı olmasın).
 - [x] Commit e-postası GitHub noreply (repo-yerel `user.email`, ilk commit'ten önce)
       2026-10-03 security-audit'te doğrulandı: 8 commit'in hepsinde yazar ve committer noreply.
+- [x] İkinci `security-audit` (tüm kod tabanı + çalışma ağacı) ve düzeltmeler
+      2026-10-03: risk Medium; sır yok, e-postalar noreply, CI SHA'ları etiketlerle doğrulandı. 2 Medium (trace symlink'i izleyip hedefe ekleme yapıyordu; adlardaki URL/token çıktıya geçip GFM'de bağlantı oluyordu), 2 Low (3.10/3.11'de derin klasör `RecursionError`; okunamayan klasör sessizce atlanıyordu), 7 gözlem. Meriç "evet": hepsi düzeltildi ya da README'de sınır olarak yazıldı (DECISIONS). `clean_name` (`(link removed)`), sıkı tip deseni, güvenli trace açma (`O_NOFOLLOW`, `0600`), özyinelemesiz tarama + `unreadable_dir`, önce `lstat`, hata satırında yalnız tip. `analysis_version` 2.3.0. 105 test (senaryo 47-51; 21, 36, 37, 41 genişledi); 25 bozmanın 23'ü ilk turda yakalandı, 1 eksik test (eklendi), 1 zayıf adım sırası (düzeltildi), son durum 25/25. Tam veride 1.973 profil ve `summary.txt` sürüm satırı dışında birebir aynı, iki çalıştırma aynı. `examples/` yeniden üretildi (sadece sürüm satırı). Rapor `security.md`'nin sonunda. `output/zie619-ae8cf6dc/` silinip 2.3.0 ile yeniden üretildi (Meriç "evet"); doğrulanan çalıştırmayla birebir aynı.
 - [ ] GitHub repo adı kararı (Meriç), `v0.1.0` etiketi
+      2026-10-03: ad `n8n-organizer` (Meriç kararı); README klon satırı `github.com/Melwis880/n8n-organizer`. Yayın öncesi temizlik (Meriç "evet"): iç bağlam genelleştirildi, CI action'ları SHA'ya sabitlendi, `*.jsonl` yok sayılıyor, optimize bulgu 5-6 uygulandı (89 test, tam veri birebir aynı), `examples/` yeni kodla birebir aynı. Etiket commit'ten sonra.
 - [ ] Sadece Meriç'in açık "evet"inden sonra: GitHub reposu ve gönderim; CI'ın geçtiğini doğrula
-- [ ] Kanıt listesine ekleme sorusu (context.md "Public proof"), Meriç "evet" derse
+- [ ] Portföy kanıt listesine ekleme sorusu, Meriç "evet" derse
 Bitti sayılır: public repo README ve çalışan CI ile yayında.

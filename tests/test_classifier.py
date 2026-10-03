@@ -1,6 +1,7 @@
 import unittest
 
-from n8n_organizer.classifier import classify_workflow, count_connections, extract_metrics, llm_step_type
+from n8n_organizer.classifier import classify_workflow, count_connections, extract_metrics, llm_step_type, type_of
+from n8n_organizer.enricher import infer_project_purpose
 from n8n_organizer.models import Category
 
 from helpers import AI_WF, DATA_WF, ORCH_WF, node, workflow
@@ -128,6 +129,33 @@ class ServiceListTests(unittest.TestCase):
         self.assertEqual(metrics.external_services, [])
 
 
+class TypePatternTests(unittest.TestCase):
+    def test_n8n_type_names_are_types(self):
+        for type_ in (
+            "n8n-nodes-base.googleSheets",
+            "@n8n/n8n-nodes-langchain.agent",
+            "@horka.tv/n8n-nodes-storage-kv.keyValueStorage",
+            "n8n-nodes-community_x.node_1",
+        ):
+            self.assertEqual(type_of({"type": type_}), type_)
+
+    def test_links_addresses_and_odd_shapes_are_no_type(self):
+        for type_ in (
+            "www.evil.example",
+            "WWW.evil",
+            "www.evil.example/phish",
+            "n8n-nodes-base.mail@evil.example",
+            "evil@x.example",
+            "n8n-nodes-base.a.b",
+            "n8n-nodes-base",
+            "n8n-nodes-base.",
+            "@scope/.x",
+            "n8n-nodes-base." + "x" * 106,
+        ):
+            self.assertEqual(type_of({"type": type_}), "", type_)
+        self.assertEqual(type_of({"type": "n8n-nodes-base." + "x" * 105}), "n8n-nodes-base." + "x" * 105)
+
+
 class TieTests(unittest.TestCase):
     def test_tie_goes_to_the_earlier_category(self):
         # googleSheets gives Data_Integration +4, webhook gives Orchestration_Reliability +4.
@@ -243,6 +271,25 @@ class StickyNoteTests(unittest.TestCase):
         metrics, score = classify_workflow(with_notes)
         self.assertEqual(metrics.node_count, plain_metrics.node_count)
         self.assertEqual(score.scores, plain_score.scores)
+
+
+class AiSignalTests(unittest.TestCase):
+    def test_ai_or_memory_signal_from_each_word_in_any_case(self):
+        for node_type in ("n8n-nodes-base.openAi", "@n8n/n8n-nodes-langchain.toolCalculator", "n8n-nodes-community.VectorDb"):
+            metrics, score = classify_workflow(workflow("AI", [node("N", node_type)]))
+            self.assertTrue(metrics.has_ai_or_memory, node_type)
+            self.assertIn("AI or memory signal -> AI_Content +2", score.reasons, node_type)
+        metrics, score = classify_workflow(workflow("Plain", [node("N", "n8n-nodes-base.slack")]))
+        self.assertFalse(metrics.has_ai_or_memory)
+        self.assertNotIn("AI or memory signal -> AI_Content +2", score.reasons)
+
+    def test_purpose_text_follows_node_types_in_any_case(self):
+        def purpose(*types):
+            return infer_project_purpose(set(types), Category.ORCHESTRATION.value)
+        self.assertTrue(purpose("n8n-nodes-base.httpRequest", "n8n-nodes-base.googleSheets").startswith("Automated data flow"))
+        self.assertTrue(purpose("@n8n/n8n-nodes-langchain.lmChatOpenAi").startswith("AI-assisted flow"))
+        self.assertTrue(purpose("n8n-nodes-base.webhook").startswith("Workflow that receives requests"))
+        self.assertTrue(purpose("n8n-nodes-base.slack").startswith("Automation for integration, orchestration"))
 
 
 class ConnectionTests(unittest.TestCase):

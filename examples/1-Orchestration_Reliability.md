@@ -35,7 +35,7 @@ external_services:
 key_patterns:
 - error_handling
 dedup_fingerprint: d7d9e252b9b2ceaa6b25db15ac75ae1f778b2efd5a4051b651e028eed573f8c1
-analysis_version: 2.2.0
+analysis_version: 2.3.0
 ```
 
 # Workflow: 0456_Error_Gmail_Send_Triggered

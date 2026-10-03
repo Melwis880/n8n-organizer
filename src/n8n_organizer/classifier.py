@@ -31,20 +31,43 @@ LANGCHAIN_PREFIX = "@n8n/n8n-nodes-langchain."
 # LangChain nodes that call a model themselves (besides lm*, chain* and agent* nodes).
 LANGCHAIN_MODEL_NODES = {"openAi", "openAiAssistant", "informationExtractor", "textClassifier", "sentimentAnalysis"}
 
-# What an n8n node type looks like (n8n-nodes-base.googleSheets, @n8n/n8n-nodes-langchain.agent).
-# No spaces or colons, so a type can never carry a URL, a header or a sentence into the output.
-NODE_TYPE_PATTERN = re.compile(r"[@A-Za-z0-9_./-]{1,120}")
+# What an n8n node type looks like: an optional npm scope, a package name, one dot and a node name
+# (n8n-nodes-base.googleSheets, @n8n/n8n-nodes-langchain.agent, @horka.tv/n8n-nodes-storage-kv.keyValueStorage).
+# No spaces, colons, second dot or "www.", so a type can never carry a URL, an e-mail address, a
+# header or a sentence into the output.
+NODE_TYPE_PATTERN = re.compile(r"(?:@[A-Za-z0-9_.-]+/)?(?!(?i:www)\.)[A-Za-z0-9_-]+\.[A-Za-z0-9_]+")
+NODE_TYPE_MAX_LEN = 120
 
 
 def type_of(node: dict[str, Any]) -> str:
     """The node's type when it looks like an n8n type name; anything else counts as no type."""
     value = node.get("type")
-    return value if isinstance(value, str) and NODE_TYPE_PATTERN.fullmatch(value) else ""
+    if isinstance(value, str) and len(value) <= NODE_TYPE_MAX_LEN and NODE_TYPE_PATTERN.fullmatch(value):
+        return value
+    return ""
 
 
-def working_nodes(data: dict[str, Any]) -> list[dict[str, Any]]:
-    """Nodes that do work. Sticky notes are comments on the canvas, not steps."""
-    return [n for n in data.get("nodes", []) if type_of(n) != STICKY_NOTE_TYPE]
+def typed_nodes(data: dict[str, Any]) -> list[tuple[dict[str, Any], str]]:
+    """Nodes that do work, each with its type. Sticky notes are comments on the canvas, not steps."""
+    return [(n, t) for n in data.get("nodes", []) if (t := type_of(n)) != STICKY_NOTE_TYPE]
+
+
+# Known services matched case-insensitively anywhere in a node type, and prefix weights in a fixed order.
+_SERVICE_HINTS = [(hint.lower(), label) for hint, label in SERVICE_NODE_HINTS.items()]
+_PREFIXES = sorted(NODE_PREFIX_WEIGHTS)
+
+# Words in a node type that signal AI or memory: OpenAI nodes, LangChain nodes, vector stores.
+AI_OR_MEMORY_WORDS = ("openai", "langchain", "vector")
+
+
+def is_openai(node_type: str) -> bool:
+    """n8n-nodes-base.openAi, @n8n/n8n-nodes-langchain.lmChatOpenAi and every other type naming OpenAI."""
+    return "openai" in node_type.lower()
+
+
+def is_ai_or_memory(node_type: str) -> bool:
+    lowered = node_type.lower()
+    return any(word in lowered for word in AI_OR_MEMORY_WORDS)
 
 
 def is_trigger(node_type: str) -> bool:
@@ -64,7 +87,7 @@ def node_weights(node_type: str) -> dict[Category, int]:
     """Weights for one node: an exact key first, then the first matching prefix key (sorted)."""
     if node_type in NODE_CATEGORY_WEIGHTS:
         return NODE_CATEGORY_WEIGHTS[node_type]
-    for prefix in sorted(NODE_PREFIX_WEIGHTS):
+    for prefix in _PREFIXES:
         if node_type.startswith(prefix):
             return NODE_PREFIX_WEIGHTS[prefix]
     return {}
@@ -84,13 +107,13 @@ def service_label(node_type: str) -> str:
 
 
 def is_llm_step(node_type: str) -> bool:
-    return node_type.startswith(LANGCHAIN_PREFIX) or "openai" in node_type.lower()
+    return node_type.startswith(LANGCHAIN_PREFIX) or is_openai(node_type)
 
 
 def generates_text(node_type: str) -> bool:
     """A node that calls a language model itself: a model, chain or agent node, or an OpenAI node."""
     if not node_type.startswith(LANGCHAIN_PREFIX):
-        return "openai" in node_type.lower()
+        return is_openai(node_type)
     name = node_type[len(LANGCHAIN_PREFIX):]
     return name.startswith(("lm", "chain", "agent")) or name in LANGCHAIN_MODEL_NODES
 
@@ -132,16 +155,19 @@ def count_connections(connections: Any) -> int:
 
 
 def extract_metrics(data: dict[str, Any]) -> WorkflowMetrics:
-    nodes = working_nodes(data)
+    return _metrics(typed_nodes(data), data.get("connections"))
+
+
+def _metrics(nodes: list[tuple[dict[str, Any], str]], connections: Any) -> WorkflowMetrics:
     metrics = WorkflowMetrics()
     metrics.node_count = len(nodes)
-    metrics.connection_count = count_connections(data.get("connections"))
+    metrics.connection_count = count_connections(connections)
 
     known_services = set()
     other_services = set()
-    for node in nodes:
-        node_type = type_of(node)
+    for node, node_type in nodes:
         node_name = node.get("name")
+        lowered = node_type.lower()
 
         if is_trigger(node_type):
             metrics.trigger_nodes.append(node_name if isinstance(node_name, str) and node_name else node_type)
@@ -151,9 +177,9 @@ def extract_metrics(data: dict[str, Any]) -> WorkflowMetrics:
             metrics.has_error_handling = True
         if node_type == "n8n-nodes-base.executeWorkflow":
             metrics.has_subworkflow = True
-        if "openai" in node_type.lower() or "langchain" in node_type.lower() or "vector" in node_type.lower():
+        if is_ai_or_memory(node_type):
             metrics.has_ai_or_memory = True
-        hints = [label for hint, label in SERVICE_NODE_HINTS.items() if hint.lower() in node_type.lower()]
+        hints = [label for hint, label in _SERVICE_HINTS if hint in lowered]
         known_services.update(hints)
         if not hints and is_unweighted_service(node_type):
             other_services.add(service_label(node_type))
@@ -193,7 +219,7 @@ def detect_patterns(node_types: set[str]) -> tuple[dict[Category, int], list[str
         patterns.append("error_handling")
         reasons.append("Error Trigger found -> Orchestration_Reliability +5")
 
-    if any("openai" in t.lower() for t in node_types):
+    if any(is_openai(t) for t in node_types):
         bonus[Category.AI_CONTENT] += 4
         reasons.append("OpenAI node found -> AI_Content +4")
 
@@ -216,19 +242,18 @@ def detect_patterns(node_types: set[str]) -> tuple[dict[Category, int], list[str
 
 
 def classify_workflow(data: dict[str, Any]) -> tuple[WorkflowMetrics, WorkflowScore]:
-    metrics = extract_metrics(data)
-    nodes = working_nodes(data)
+    nodes = typed_nodes(data)
+    metrics = _metrics(nodes, data.get("connections"))
 
     scores: dict[Category, int] = {category: 0 for category in Category}
     reasons: list[str] = []
 
-    for node in nodes:
-        node_type = type_of(node)
+    for _, node_type in nodes:
         for category, value in node_weights(node_type).items():
             scores[category] += value
             reasons.append(f"{node_type} -> {category.value} +{value}")
 
-    node_types = {type_of(n) for n in nodes}
+    node_types = {t for _, t in nodes}
     for node_type in sorted(node_types):
         if is_unweighted_service(node_type):
             scores[Category.DATA_INTEGRATION] += SERVICE_NODE_WEIGHT

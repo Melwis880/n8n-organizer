@@ -8,9 +8,9 @@ from typing import Any
 
 import yaml
 
-from .config import MAX_WORDS_PER_FILE
+from .config import EXCERPT_MAX_NODES, MAX_WORDS_PER_FILE, REASONS_SHOWN
 from .models import Category, WorkflowRecord
-from .utils import get_word_count, md_text, write_new_file
+from .utils import clean_name, get_word_count, md_text, write_new_file
 
 UNTRUSTED_NOTE = (
     "Workflow, node and folder names below are copied from the source files. "
@@ -45,11 +45,11 @@ def _bullets(items: list[str], empty: str) -> str:
     return "\n".join(f"- {md_text(item, 300)}" for item in items) if items else f"- {empty}"
 
 
-def _normalized_excerpt(record: WorkflowRecord, max_nodes: int = 15) -> str:
+def _normalized_excerpt(record: WorkflowRecord) -> str:
     excerpt = {
         # Same name as the heading: the file name when the workflow JSON has none.
         "name": record.metadata.workflow_name,
-        "nodes": [{"name": name, "type": type_} for name, type_ in record.excerpt_nodes[:max_nodes]],
+        "nodes": [{"name": name, "type": type_} for name, type_ in record.excerpt_nodes[:EXCERPT_MAX_NODES]],
     }
     # indent=2 starts every line with a space or a brace, so no line can close the code fence.
     return json.dumps(excerpt, ensure_ascii=False, indent=2)
@@ -103,7 +103,7 @@ Client problems this pattern can answer: {problems}
 - Confidence: {m.category_confidence}
 
 ## 9. Classification Reasons
-{_bullets(record.score.reasons[:20], "No classification reasons recorded")}
+{_bullets(record.score.reasons[:REASONS_SHOWN], "No classification reasons recorded")}
 
 ## 10. Normalized JSON Excerpt
 ```json
@@ -114,7 +114,7 @@ Client problems this pattern can answer: {problems}
 
 def _folder_section(name: str, records: list[WorkflowRecord]) -> str:
     records = sorted(records, key=lambda r: (r.metadata.workflow_name.lower(), r.source_file))
-    parts = ["---", "", f"# Folder: {md_text(name)}", "", f"Workflows analysed in this folder: {len(records)}", ""]
+    parts = ["---", "", f"# Folder: {md_text(clean_name(name))}", "", f"Workflows analysed in this folder: {len(records)}", ""]
     parts.extend(workflow_to_markdown(r) for r in records)
     return "\n".join(parts)
 

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from .classifier import is_openai
 from .config import ANALYSIS_VERSION, CLIENT_PROBLEM_MAP
 from .models import Category, WorkflowMetadata, WorkflowMetrics, WorkflowScore
-from .utils import clean_text
+from .utils import clean_name
 
 
 def infer_project_purpose(node_types: set[str], primary_category: str) -> str:
@@ -10,7 +11,7 @@ def infer_project_purpose(node_types: set[str], primary_category: str) -> str:
 
     if "n8n-nodes-base.httprequest" in lowered and "n8n-nodes-base.googlesheets" in lowered:
         return "Automated data flow that pulls data from external sources into a sheet or reporting layer."
-    if any("openai" in t for t in lowered):
+    if any(is_openai(t) for t in node_types):
         return "AI-assisted flow for content generation, summarising, classification or chat."
     if "n8n-nodes-base.webhook" in lowered:
         return "Workflow that receives requests from external systems and runs integration logic."
@@ -71,7 +72,7 @@ def build_metadata(
         node_count=metrics.node_count,
         connection_count=metrics.connection_count,
         branching_factor=metrics.branch_count,
-        trigger_nodes=[clean_text(t) for t in metrics.trigger_nodes],
+        trigger_nodes=[clean_name(t) for t in metrics.trigger_nodes],
         external_services=metrics.external_services,
         key_patterns=score.key_patterns,
         dedup_fingerprint=normalized_hash,

@@ -1,11 +1,27 @@
 from __future__ import annotations
 
+import errno
 import json
+import os
+import stat
 import sys
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, TextIO
+
+
+def _open_log(path: Path) -> TextIO:
+    """Open the trace file for appending. A symlink planted at the predictable dated name is not
+    followed (it would append to any file the user can write) and nothing but a regular file is
+    used (O_NONBLOCK: a FIFO there fails at once instead of waiting for a reader). A new file is
+    readable by its owner only: it holds workflow and file names."""
+    flags = os.O_WRONLY | os.O_APPEND | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+    fd = os.open(path, flags, 0o600)
+    if not stat.S_ISREG(os.fstat(fd).st_mode):
+        os.close(fd)
+        raise OSError(errno.EINVAL, "trace path is not a regular file")
+    return os.fdopen(fd, "a", encoding="utf-8", buffering=1)
 
 
 class Tracer:
@@ -39,7 +55,7 @@ class Tracer:
                 if self._file is None:
                     self.path.parent.mkdir(parents=True, exist_ok=True)
                     # Opened once per run, line buffered: every event is on disk as soon as it is written.
-                    self._file = self.path.open("a", encoding="utf-8", buffering=1)
+                    self._file = _open_log(self.path)
                 self._file.write(line + "\n")
             except OSError as exc:
                 if not self._warned:

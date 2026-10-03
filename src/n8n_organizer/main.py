@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .classifier import classify_workflow, type_of, working_nodes
-from .config import MAX_FILE_BYTES, MAX_WORDS_PER_FILE
+from .classifier import classify_workflow, typed_nodes
+from .config import EXCERPT_MAX_NODES, MAX_FILE_BYTES, MAX_WORDS_PER_FILE, REASONS_SHOWN
 from .deduper import deduplicate_records
 from .enricher import build_metadata
 from .loader import iter_workflow_files, load_workflow_json
@@ -11,7 +11,7 @@ from .markdown_writer import write_category_markdowns
 from .models import RunResult, WorkflowRecord
 from .normalizer import normalize_workflow
 from .trace import Tracer
-from .utils import clean_text, has_unsafe_chars, sha256_json, text_field, write_new_file
+from .utils import clean_name, clean_text, has_unsafe_chars, sha256_json, text_field, write_new_file
 
 
 class UsageError(Exception):
@@ -30,16 +30,19 @@ def check_locations(input_dir: Path, output_dir: Path) -> None:
 
 
 def build_record(path: Path, rel: str, data: dict) -> WorkflowRecord:
-    name = clean_text(text_field(data.get("name"))) or clean_text(path.stem)
+    name = clean_name(text_field(data.get("name"))) or clean_name(path.stem)
     normalized = normalize_workflow(data)
     raw_hash = sha256_json(data)
     normalized_hash = sha256_json(normalized)
     metrics, score = classify_workflow(data)
-    working = working_nodes(data)
-    node_types = {type_of(n) for n in working}
+    working = typed_nodes(data)
+    node_types = {t for _, t in working}
     metadata = build_metadata(rel, name, raw_hash, normalized_hash, metrics, score, node_types)
-    nodes = [(clean_text(text_field(n.get("name"))), type_of(n)) for n in working]
-    excerpt_nodes = [(clean_text(text_field(n.get("name"))), type_of(n)) for n in working_nodes(normalized)]
+    nodes = [(clean_name(text_field(n.get("name"))), t) for n, t in working]
+    # Keep only what a profile shows, so a record stays small however large the workflow is.
+    excerpt = typed_nodes(normalized)[:EXCERPT_MAX_NODES]
+    excerpt_nodes = [(clean_name(text_field(n.get("name"))), t) for n, t in excerpt]
+    score.reasons = score.reasons[:REASONS_SHOWN]
     return WorkflowRecord(rel, nodes, excerpt_nodes, raw_hash, normalized_hash, metrics, score, metadata)
 
 
@@ -83,7 +86,13 @@ def _run(input_dir: Path, output_dir: Path, tracer: Tracer, max_words: int, max_
     result = RunResult()
     records: list[WorkflowRecord] = []
 
-    for path in iter_workflow_files(input_dir):
+    def unreadable_folder(folder: Path, exc: OSError) -> None:
+        # Counted and traced: files in a folder that cannot be listed were never seen.
+        result.skipped["unreadable_dir"] = result.skipped.get("unreadable_dir", 0) + 1
+        rel = folder.relative_to(input_dir).as_posix()
+        tracer.event("skipped", path=rel, reason="unreadable_dir", detail=clean_text(exc.strerror))
+
+    for path in iter_workflow_files(input_dir, on_error=unreadable_folder):
         rel = path.relative_to(input_dir).as_posix()
         result.files_found += 1
         tracer.event("found", path=rel)
@@ -102,9 +111,10 @@ def _run(input_dir: Path, output_dir: Path, tracer: Tracer, max_words: int, max_
             tracer.event("loaded", path=rel)
             record = build_record(path, rel, loaded.data)
         except Exception as exc:  # one bad file must not stop the run
-            # An OSError message carries the full path as given to --input; strerror does not.
-            detail = clean_text(exc.strerror if isinstance(exc, OSError) and exc.strerror else str(exc))
-            result.errors.append(f"{rel}: {type(exc).__name__}: {detail}")
+            # An OSError message carries the full path as given to --input; strerror does not. Other
+            # messages are left out: one built from a workflow value could carry its content.
+            detail = clean_text(exc.strerror) if isinstance(exc, OSError) and exc.strerror else ""
+            result.errors.append(f"{rel}: {type(exc).__name__}" + (f": {detail}" if detail else ""))
             tracer.event("error", path=rel, error=type(exc).__name__, detail=detail)
             continue
         records.append(record)

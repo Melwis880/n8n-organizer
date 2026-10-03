@@ -2,11 +2,15 @@ from __future__ import annotations
 
 from .models import Category
 
-ANALYSIS_VERSION = "2.2.0"
+ANALYSIS_VERSION = "2.3.0"
 
 MAX_WORDS_PER_FILE = 450_000
 
 MAX_FILE_BYTES = 10 * 1024 * 1024
+
+# How much of a workflow each profile shows; records keep no more than this.
+EXCERPT_MAX_NODES = 15
+REASONS_SHOWN = 20
 
 STICKY_NOTE_TYPE = "n8n-nodes-base.stickyNote"
 

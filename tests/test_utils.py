@@ -3,7 +3,7 @@ import unittest
 import tempfile
 from pathlib import Path
 
-from n8n_organizer.utils import clean_text, md_text, write_new_file
+from n8n_organizer.utils import clean_name, clean_text, md_text, write_new_file
 
 
 class CleanTextTests(unittest.TestCase):
@@ -31,6 +31,32 @@ class CleanTextTests(unittest.TestCase):
         self.assertEqual(clean_text(None), "")
         self.assertEqual(clean_text(42), "42")
         self.assertEqual(clean_text(["a", "b"]), "['a', 'b']")
+
+
+class CleanNameTests(unittest.TestCase):
+    def test_urls_and_email_addresses_are_removed(self):
+        self.assertEqual(clean_name("GET https://api.example/v1?key=K1 now"), "GET (link removed) now")
+        self.assertEqual(clean_name("see WWW.example.org/a"), "see (link removed)")
+        self.assertEqual(clean_name("ftp://h/x and s3://bucket/key"), "(link removed) and (link removed)")
+        self.assertEqual(clean_name("mail ops+alerts@corp.example."), "mail (link removed).")
+        self.assertEqual(clean_name("a_www.x.example b_https://y.example"), "a_(link removed) b_(link removed)")
+
+    def test_closing_punctuation_stays(self):
+        self.assertEqual(clean_name("Fetch (https://x.example/a)."), "Fetch ((link removed)).")
+        self.assertEqual(clean_name("[a](https://x.example)"), "[a]((link removed))")
+
+    def test_a_zero_width_character_cannot_hide_a_link(self):
+        self.assertEqual(clean_name("ht\u200btps://hidden.example/T"), "ht (link removed)")
+        self.assertEqual(clean_name("GET https://x.example/TO\u200bKEN\x00X end"), "GET (link removed) end")
+        # Split by a space, it is no longer a link; a bare host name is kept like any dotted word.
+        self.assertEqual(clean_name("www\u200b.hidden.example"), "www .hidden.example")
+
+    def test_ordinary_names_are_kept(self):
+        for name in ("Node.js v1.2 (step 3).", "Q&A: a > b", "@n8n/n8n-nodes-langchain.agent", "Café 📄", "x@y", "e-mail me"):
+            self.assertEqual(clean_name(name), name)
+
+    def test_truncated_after_removal(self):
+        self.assertEqual(len(clean_name("https://x.example/" + "a" * 50 + " " + "b" * 300)), 200)
 
 
 class MdTextTests(unittest.TestCase):

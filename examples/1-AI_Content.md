@@ -36,7 +36,7 @@ external_services:
 key_patterns:
 - rag_or_vector_memory
 dedup_fingerprint: 3d9cc23459c388f65ad94968ffc078928974d068cd08dd2741a8e08c9c1f527d
-analysis_version: 2.2.0
+analysis_version: 2.3.0
 ```
 
 # Workflow: Store Notion's Pages as Vector Documents into Supabase with OpenAI

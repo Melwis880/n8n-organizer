@@ -15,6 +15,13 @@ UNSAFE_CATEGORIES = ("Cc", "Cf", "Zl", "Zp", "Cs")
 # Characters that can start a link, image, HTML tag, comment or code span in Markdown.
 _MD_SPECIAL = re.compile(r"([\\`<\[\]])")
 
+# URLs (any scheme, or www.) and e-mail addresses inside a name. n8n users often name a node
+# "GET https://host/path?key=...", and Markdown viewers turn such text into a clickable link.
+# Punctuation that ends a sentence or closes a bracket stays: "Fetch (https://x.example)."
+# No word boundary in front: a viewer also links "a_www.x.example" and "a_https://x.example".
+_LINKISH = re.compile(r"""(?i)(?:[a-z][a-z0-9+.-]*://|www\.)\S*[^\s.,;:!?)\]}'">]|[\w.+-]+@[\w-]+\.[\w.-]*\w""")
+LINK_PLACEHOLDER = "(link removed)"
+
 
 def sha256_text(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
@@ -41,6 +48,13 @@ def clean_text(value: Any, max_len: int = 200) -> str:
     if len(text) > max_len:
         text = text[: max_len - 3].rstrip() + "..."
     return text
+
+
+def clean_name(value: Any, max_len: int = 200) -> str:
+    """A name for the output and the trace: URLs and e-mail addresses removed, then clean_text.
+    Removed first: a zero-width or control character inside a URL is part of it, and cleaning
+    would turn it into a space that cuts the URL in two and leaves its tail behind."""
+    return clean_text(_LINKISH.sub(LINK_PLACEHOLDER, text_field(value)), max_len)
 
 
 def has_unsafe_chars(text: str) -> bool:

@@ -30,7 +30,8 @@ On the [Zie619/n8n-workflows](https://github.com/Zie619/n8n-workflows) collectio
 Needs Python 3.10 or newer. The only dependency is PyYAML.
 
 ```bash
-# from a checkout of this repository
+git clone https://github.com/Melwis880/n8n-organizer
+cd n8n-organizer
 python -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -e .
@@ -106,8 +107,11 @@ short normalized node list.
 **What never reaches the output:** node parameters, credentials, URLs and sticky-note text.
 Workflows often carry API keys in parameters, so only names, types, counts and hashes are
 written. A workflow or node name that is not a string is ignored, and a node type that does not
-look like an n8n type name (letters, digits and `@ _ . / -` only) counts as no type, so neither
-can carry other content into the output.
+look like an n8n type name (an optional `@scope/`, a package name, one dot and a node name)
+counts as no type, so neither can carry other content into the output. URLs (any scheme, or
+`www.`) and e-mail addresses inside workflow, node, trigger and folder names become
+`(link removed)`: users often name a node after the address it calls, query string and key
+included. Bare host names and file paths (`source_file`) are kept.
 
 **Names are untrusted text.** Control characters and line breaks become spaces. In headings and
 lists, the characters that start a link, image, HTML tag or code span (`[`, `]`, `<`, `` ` `` and
@@ -123,7 +127,10 @@ and `seq`. Each file produces `found`, then `skipped` (with a reason) or `loaded
 run starts with `run_start` and ends with `written` per file and `run_end` with the totals. The
 trace holds paths relative to `--input`, names, hashes and numbers, never workflow content;
 `run_start` records only the input and output folder names. `--log-dir` is relative to the
-current folder.
+current folder: run from inside another git repository and the trace (workflow and file names)
+lands there, so pass `--log-dir` or ignore `*.jsonl` in that repository. A new trace file is
+readable by its owner only. If the trace path is a symlink or not a regular file, the tool
+warns once and runs without a trace; it never writes through a link.
 
 ## Classification
 
@@ -184,8 +191,11 @@ All weights live in [`src/n8n_organizer/config.py`](src/n8n_organizer/config.py)
   file or folder names with bytes that are not UTF-8, line breaks or control characters, files
   that are not valid UTF-8 (a BOM is fine), invalid JSON, and JSON that is not a workflow (no
   top-level object with a `nodes` list, such as `package.json`).
+- A folder that cannot be listed is skipped as `unreadable_dir`, with its relative path in the
+  trace. Folders are walked without recursion, so any depth works on every Python version.
 - A file that cannot be read is counted as an error with the reason (for example "Permission
-  denied") and its relative path, never the absolute path.
+  denied") and its relative path, never the absolute path. Other errors show only their type
+  (for example `ValueError`): their message could quote a value from the workflow.
 - Duplicates are found in two steps: same JSON content (key order and whitespace ignored), then
   same name, nodes and connections after ignoring node ids, positions, credentials, webhook ids,
   node order and node-name case. Workflow-level fields such as `id`, `tags` and `settings` are
@@ -211,6 +221,10 @@ All weights live in [`src/n8n_organizer/config.py`](src/n8n_organizer/config.py)
 - **Prose fields are per category, not per workflow.** Summary, value and client problems are
   fixed texts for the category.
 - Word counts for splitting are approximate.
+- **No cap on the number of files.** Each file is limited to 10 MB, but a folder with millions
+  of workflows makes the output, and memory for the node lists, grow with it.
+- On Python 3.10, use 3.10.7 or newer: older releases parse a huge integer in JSON in quadratic
+  time, so one 10 MB number can stall a run.
 
 ## Development
 

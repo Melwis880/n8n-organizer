@@ -7,7 +7,7 @@ Build a Python-based analysis pipeline that scans folders containing n8n workflo
 ## Primary Goal
 Transform raw n8n workflow JSON exports into structured, searchable, high-value training documents that can be used as:
 1. A NotebookLM idea pool and architecture reference library
-2. A Freelancer.com proposal support library
+2. A proposal and project-scoping support library
 3. A GitHub portfolio knowledge base
 
 ## Core Categories

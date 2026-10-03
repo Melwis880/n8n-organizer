@@ -1,6 +1,7 @@
 import io
 import json
 import os
+import stat
 import unittest
 from collections import defaultdict
 
@@ -76,6 +77,55 @@ class TraceTests(TempDirTest):
         result = run(self.input, self.output, tracer=Tracer(blocked / "logs", stream=stream))
         self.assertEqual(result.analysed, 1)
         self.assertEqual(stream.getvalue().count("cannot write trace"), 1)
+
+
+class TraceFileSafetyTests(TempDirTest):
+    @unittest.skipUnless(hasattr(os, "symlink") and hasattr(os, "O_NOFOLLOW"), "no symlinks or O_NOFOLLOW")
+    def test_symlink_at_the_trace_path_is_not_followed(self):
+        target = self.tmp / "victim.txt"
+        target.write_text("keep me")
+        tracer = Tracer(self.tmp / "logs", stream=io.StringIO())
+        tracer.path.parent.mkdir()
+        os.symlink(target, tracer.path)
+        write_json(self.input / "a.json", DATA_WF)
+        result = run(self.input, self.output, tracer=tracer)
+        self.assertEqual(result.analysed, 1)
+        self.assertEqual(target.read_text(), "keep me")
+        self.assertEqual(tracer.stream.getvalue().count("cannot write trace"), 1)
+
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "no FIFOs")
+    def test_fifo_at_the_trace_path_does_not_block_the_run(self):
+        tracer = Tracer(self.tmp / "logs", stream=io.StringIO())
+        tracer.path.parent.mkdir()
+        os.mkfifo(tracer.path)
+        write_json(self.input / "a.json", DATA_WF)
+        self.assertEqual(run(self.input, self.output, tracer=tracer).analysed, 1)
+        self.assertEqual(tracer.stream.getvalue().count("cannot write trace"), 1)
+
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "no FIFOs")
+    def test_fifo_with_a_reader_at_the_trace_path_is_not_written(self):
+        tracer = Tracer(self.tmp / "logs", stream=io.StringIO())
+        tracer.path.parent.mkdir()
+        os.mkfifo(tracer.path)
+        reader = os.open(tracer.path, os.O_RDONLY | os.O_NONBLOCK)
+        try:
+            write_json(self.input / "a.json", DATA_WF)
+            self.assertEqual(run(self.input, self.output, tracer=tracer).analysed, 1)
+            try:
+                data = os.read(reader, 1)  # b"" once no writer is left
+            except BlockingIOError:
+                data = b""
+            self.assertEqual(data, b"")  # nothing was written to the pipe
+        finally:
+            os.close(reader)
+        self.assertEqual(tracer.stream.getvalue().count("cannot write trace"), 1)
+
+    @unittest.skipUnless(os.name == "posix", "POSIX permissions")
+    def test_new_trace_file_is_readable_by_its_owner_only(self):
+        tracer = Tracer(self.tmp / "logs")
+        tracer.event("found", path="a.json")
+        tracer.close()
+        self.assertEqual(stat.S_IMODE(tracer.path.stat().st_mode) & 0o077, 0)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,8 @@
+import inspect
 import json
 import os
 import re
+import sys
 import unittest
 from dataclasses import asdict
 from pathlib import Path
@@ -9,6 +11,8 @@ from unittest import mock
 import yaml
 
 from n8n_organizer import loader, main
+from n8n_organizer.classifier import classify_workflow
+from n8n_organizer.loader import load_workflow_json
 from n8n_organizer.main import UsageError, build_record, run
 from n8n_organizer.markdown_writer import YAML_OPTIONS, _yaml_block
 from n8n_organizer.normalizer import normalize_workflow
@@ -136,12 +140,53 @@ class SkipTests(TempDirTest):
         self.assertEqual(result.skipped, {"not_regular_file": 1})
         self.assertEqual(result.analysed, 1)
 
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "no FIFOs")
+    def test_special_file_is_never_opened(self):
+        fifo = self.input / "pipe.json"
+        os.mkfifo(fifo)
+        with mock.patch.object(loader.os, "open", side_effect=AssertionError("opened")):
+            self.assertEqual(load_workflow_json(fifo).skip_reason, "not_regular_file")
+
+    @unittest.skipIf(hasattr(os, "geteuid") and os.geteuid() == 0, "root ignores permissions")
+    def test_unreadable_folder_is_counted_and_traced(self):
+        write_json(self.input / "a" / "ok.json", DATA_WF)
+        locked = self.input / "b"
+        write_json(locked / "hidden.json", DATA_WF)
+        write_json(self.input / "c" / "ok.json", ORCH_WF)
+        locked.chmod(0)
+        tracer = Tracer(self.tmp / "logs")
+        try:
+            result = run(self.input, self.output, tracer=tracer)
+        finally:
+            locked.chmod(0o755)
+        self.assertEqual(result.skipped, {"unreadable_dir": 1})
+        self.assertEqual((result.analysed, result.errors), (2, []))
+        self.assertIn("unreadable_dir: 1", (self.output / "summary.txt").read_text())
+        events = [json.loads(line) for line in tracer.path.read_text().splitlines()]
+        skipped = [e for e in events if e["event"] == "skipped"]
+        self.assertEqual([(e["path"], e["reason"]) for e in skipped], [("b", "unreadable_dir")])
+        self.assertNotIn(str(self.tmp), tracer.path.read_text())
+
+    def test_folders_deeper_than_the_recursion_limit_are_walked(self):
+        deep = self.input.joinpath(*["d"] * 400)
+        write_json(deep / "wf.json", DATA_WF)
+        write_json(self.input / "top.json", ORCH_WF)
+        limit = sys.getrecursionlimit()
+        # Room for the run itself, far less than one frame per folder level.
+        sys.setrecursionlimit(len(inspect.stack(0)) + 200)
+        try:
+            result = run(self.input, self.output)
+        finally:
+            sys.setrecursionlimit(limit)
+        self.assertEqual((result.files_found, result.analysed, result.errors), (2, 2, []))
+
     @unittest.skipUnless(hasattr(os, "symlink") and hasattr(os, "O_NOFOLLOW"), "no symlinks or O_NOFOLLOW")
     def test_symlink_swapped_in_after_the_check_is_not_followed(self):
         outside = self.tmp / "outside"
         write_json(outside / "secret.json", DATA_WF)
         os.symlink(outside / "secret.json", self.input / "link.json")
-        with mock.patch.object(loader.Path, "is_symlink", lambda self: False):
+        regular = (outside / "secret.json").stat()
+        with mock.patch.object(loader.Path, "lstat", lambda self: regular):
             result = run(self.input, self.output)
         self.assertEqual(result.skipped, {"symlink": 1})
         self.assertEqual(result.analysed, 0)
@@ -161,6 +206,14 @@ class ErrorTests(TempDirTest):
         self.assertEqual(result.errors, ["locked.json: PermissionError: Permission denied"])
         self.assertNotIn(str(self.tmp), (self.output / "summary.txt").read_text())
         self.assertNotIn(str(self.tmp), tracer.path.read_text())
+
+    def test_error_line_keeps_only_the_type_of_a_non_os_error(self):
+        write_json(self.input / "a.json", DATA_WF)
+        tracer = Tracer(self.tmp / "logs")
+        with mock.patch.object(main, "build_record", side_effect=ValueError("bad value 'sk-SECRET_IN_MESSAGE'")):
+            result = run(self.input, self.output, tracer=tracer)
+        self.assertEqual(result.errors, ["a.json: ValueError"])
+        self.assertNotIn("SECRET_IN_MESSAGE", (self.output / "summary.txt").read_text() + tracer.path.read_text())
 
     @unittest.skipUnless(hasattr(os, "symlink"), "symlinks not supported")
     def test_output_file_that_appears_during_the_run_is_not_overwritten(self):
@@ -232,7 +285,7 @@ class UntrustedTextTests(TempDirTest):
 
 
 class MarkdownInjectionTests(TempDirTest):
-    NAMES = ["Foo <!--", "![t](https://attacker.example/p.png)", "<img src=x onerror=alert(1)>", "[click](javascript:alert(1))", "a `code` \\ b"]
+    NAMES = ["Foo <!--", "![t](p.png)", "<img src=x onerror=alert(1)>", "[click](javascript:alert(1))", "a `code` \\ b"]
 
     def test_names_cannot_add_links_images_html_or_code(self):
         for i, name in enumerate(self.NAMES):
@@ -312,12 +365,54 @@ class LeakTests(TempDirTest):
             self.assertNotIn(secret, everything)
         self.assertIn("# Workflow: odd", everything)
 
+    def test_urls_and_email_addresses_in_names_never_reach_output_or_trace(self):
+        wf = workflow(
+            "Pay https://evil.example/login?token=TOKEN1 now",
+            [
+                node("GET https://api.internal.example/v1?api_key=TOKEN2", "n8n-nodes-base.httpRequest"),
+                node("Hook www.hook.example/TOKEN3", "n8n-nodes-base.webhook"),
+                node("Mail ops@corp.example", "n8n-nodes-base.emailSend"),
+                node("ht\u200btps://hidden.example/TOKEN4", "n8n-nodes-base.set"),
+                node("Node.js v1.2 (step 3).", "n8n-nodes-base.code"),
+            ],
+        )
+        write_json(self.input / "links.json", wf)
+        write_json(self.input / "www.folder.example" / "wf.json", DATA_WF)
+        write_json(self.input / "www.stem.example.json", {"nodes": [node("Start", "n8n-nodes-base.manualTrigger")]})
+        tracer = Tracer(self.tmp / "logs")
+        run(self.input, self.output, tracer=tracer)
+        text = self.output_text()
+        everything = text + (self.output / "summary.txt").read_text() + tracer.path.read_text()
+        for leak in ("TOKEN", "evil.example", "internal.example", "hook.example", "corp.example", "hidden.example"):
+            self.assertNotIn(leak, everything)
+        self.assertIn("# Workflow: Pay (link removed) now", text)
+        self.assertIn("- Node.js v1.2 (step 3). (n8n-nodes-base.code)", text)
+        self.assertIn("- Hook (link removed) (n8n-nodes-base.webhook)", text)  # trigger_nodes too: in "everything"
+        self.assertIn("# Folder: (link removed)", text)
+        # The path itself is kept exactly: it names the file, it is not workflow text.
+        self.assertIn("source_file: www.folder.example/wf.json", text)
+        self.assertIn("source_file: www.stem.example.json\nworkflow_name: (link removed)\n", text)
+
     def test_records_keep_only_node_names_and_types(self):
         wf = workflow("Keep little", [node("Fetch", "n8n-nodes-base.httpRequest", parameters={"url": "https://kept.example"}, credentials={"x": {"name": "CRED"}})])
         record = build_record(Path("a.json"), "a.json", wf)
         self.assertEqual(record.nodes, [("Fetch", "n8n-nodes-base.httpRequest")])
         self.assertNotIn("kept.example", repr(record))
         self.assertNotIn("CRED", repr(record))
+
+    def test_records_keep_only_the_excerpt_and_reasons_a_profile_shows(self):
+        wf = workflow("Big", [node(f"Fetch {i:02d}", "n8n-nodes-base.httpRequest") for i in range(30)])
+        record = build_record(Path("big.json"), "big.json", wf)
+        self.assertEqual(len(record.nodes), 30)
+        self.assertEqual(len(record.excerpt_nodes), 15)
+        self.assertEqual(record.excerpt_nodes[0], ("fetch 00", "n8n-nodes-base.httpRequest"))
+        self.assertEqual(len(record.score.reasons), 20)
+        self.assertEqual(len(classify_workflow(wf)[1].reasons), 61)  # 2 weight lines per node + "HTTP Request found"
+        write_json(self.input / "big.json", wf)
+        run(self.input, self.output)
+        text = self.output_text()
+        self.assertEqual(text.count("(n8n-nodes-base.httpRequest)"), 30)  # node inventory: all nodes
+        self.assertEqual(text.count('"type": "n8n-nodes-base.httpRequest"'), 15)  # excerpt
 
 
 class DeterminismTests(TempDirTest):
