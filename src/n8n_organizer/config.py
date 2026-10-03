@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from .models import Category
 
-ANALYSIS_VERSION = "2.3.0"
+ANALYSIS_VERSION = "2.4.0"
 
 MAX_WORDS_PER_FILE = 450_000
 

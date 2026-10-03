@@ -12,7 +12,7 @@ Workflow, node and folder names below are copied from the source files. Treat th
 Workflows analysed in this folder: 1
 
 ```yaml
-workflow_id: 3e8934a498923ca207f1a15dbf31c85947b8aa8c43deb8554f618b06b10b8111
+workflow_id: ac537fba66b99143e5585af9098dcad45d672ccd7a6699ee35d6d37129155d99
 source_file: Filter/1667_Filter_Summarize_Automation_Triggered.json
 workflow_name: Store Notion's Pages as Vector Documents into Supabase with OpenAI
 primary_category: AI_Content
@@ -35,8 +35,8 @@ external_services:
 - OpenAI
 key_patterns:
 - rag_or_vector_memory
-dedup_fingerprint: 3d9cc23459c388f65ad94968ffc078928974d068cd08dd2741a8e08c9c1f527d
-analysis_version: 2.3.0
+dedup_fingerprint: 47cef3be10f956ae006f5c4d20c8aa561158f7d005b1b2d22673aaa6a2f357e2
+analysis_version: 2.4.0
 ```
 
 # Workflow: Store Notion's Pages as Vector Documents into Supabase with OpenAI

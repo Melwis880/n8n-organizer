@@ -12,7 +12,7 @@ Workflow, node and folder names below are copied from the source files. Treat th
 Workflows analysed in this folder: 1
 
 ```yaml
-workflow_id: 14e8a0cc160716f5f34848c771c17a688b89d9bed0b95a253746d3049dc7045d
+workflow_id: 64216760be26d51b6bff673bef99a3feaf192422a3d9817ec5ff52757ba4245f
 source_file: Manual/0943_Manual_Xml_Automation_Triggered.json
 workflow_name: XML Conversion
 primary_category: Data_Integration
@@ -32,8 +32,8 @@ trigger_nodes:
 - On clicking 'execute'
 external_services: []
 key_patterns: []
-dedup_fingerprint: db9200d00514f6ee47d4360f8d81e9ffac33a48c2a7f65ef7d4cda78c08bb584
-analysis_version: 2.3.0
+dedup_fingerprint: 6e33655952fb5f942736df4aee71710821b61055b0d6e3474963203439a586ae
+analysis_version: 2.4.0
 ```
 
 # Workflow: XML Conversion
@@ -100,7 +100,7 @@ Client problems this pattern can answer: Automated reporting, Lead collection, D
 Workflows analysed in this folder: 1
 
 ```yaml
-workflow_id: 33eac875d09020212f57fdd3adfced43afa702aed1955704d2815918447e7037
+workflow_id: 581bb12b726f40afb76ddb427e6fa256dc24b28c5798e5ac563d1bc9a0f60191
 source_file: Splitout/1564_Splitout_Manual_Create_Webhook.json
 workflow_name: Search LinkedIn companies and add them to Airtable CRM
 primary_category: Data_Integration
@@ -123,8 +123,8 @@ external_services:
 - HTTP API
 key_patterns:
 - api_ingestion
-dedup_fingerprint: 205bfebf0172f1105d6e3af6170ee833896eadadb710cc21dd2c2825bf14dbce
-analysis_version: 2.3.0
+dedup_fingerprint: 09cf5e5e3c8d31f847541c42e4b8a5e73788e1b33160061802452fb8195552d8
+analysis_version: 2.4.0
 ```
 
 # Workflow: Search LinkedIn companies and add them to Airtable CRM

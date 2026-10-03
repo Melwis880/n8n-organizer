@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from collections import defaultdict
-from typing import Any, Iterable
+from typing import Any, Iterable, Iterator
 
 from .config import (
     CORE_NODE_TYPES,
@@ -31,11 +31,12 @@ LANGCHAIN_PREFIX = "@n8n/n8n-nodes-langchain."
 # LangChain nodes that call a model themselves (besides lm*, chain* and agent* nodes).
 LANGCHAIN_MODEL_NODES = {"openAi", "openAiAssistant", "informationExtractor", "textClassifier", "sentimentAnalysis"}
 
-# What an n8n node type looks like: an optional npm scope, a package name, one dot and a node name
-# (n8n-nodes-base.googleSheets, @n8n/n8n-nodes-langchain.agent, @horka.tv/n8n-nodes-storage-kv.keyValueStorage).
-# No spaces, colons, second dot or "www.", so a type can never carry a URL, an e-mail address, a
+# What an n8n node type looks like: an optional npm scope, a package named n8n-nodes-* (n8n loads
+# community nodes only from such packages), one dot and a node name (n8n-nodes-base.googleSheets,
+# @n8n/n8n-nodes-langchain.agent). No spaces, colons, second dot or dot in the scope, so a type can
+# never carry a URL, a host name with a path (@evil.example/n8n-nodes-x.y), an e-mail address, a
 # header or a sentence into the output.
-NODE_TYPE_PATTERN = re.compile(r"(?:@[A-Za-z0-9_.-]+/)?(?!(?i:www)\.)[A-Za-z0-9_-]+\.[A-Za-z0-9_]+")
+NODE_TYPE_PATTERN = re.compile(r"(?:@[A-Za-z0-9_-]+/)?n8n-nodes-[A-Za-z0-9_-]+\.[A-Za-z0-9_]+")
 NODE_TYPE_MAX_LEN = 120
 
 
@@ -137,12 +138,12 @@ def llm_step_type(node_types: Iterable[str]) -> str | None:
     return min(steps, key=lambda t: (_llm_rank(t), t)) if steps else None
 
 
-def count_connections(connections: Any) -> int:
-    """Count edges: source node -> output type (main, ai_tool, ...) -> output slot -> target list."""
+def iter_edges(connections: Any) -> Iterator[tuple[str, dict[str, Any]]]:
+    """Every edge as (source node name, target): source node -> output type (main, ai_tool, ...) ->
+    output slot -> target list."""
     if not isinstance(connections, dict):
-        return 0
-    total = 0
-    for outputs in connections.values():
+        return
+    for source, outputs in connections.items():
         if not isinstance(outputs, dict):
             continue
         for slots in outputs.values():
@@ -150,8 +151,13 @@ def count_connections(connections: Any) -> int:
                 continue
             for targets in slots:
                 if isinstance(targets, list):
-                    total += sum(1 for t in targets if isinstance(t, dict))
-    return total
+                    for target in targets:
+                        if isinstance(target, dict):
+                            yield source, target
+
+
+def count_connections(connections: Any) -> int:
+    return sum(1 for _ in iter_edges(connections))
 
 
 def extract_metrics(data: dict[str, Any]) -> WorkflowMetrics:

@@ -89,7 +89,8 @@ as text, links and HTML included:
 
 | Field | Content |
 |---|---|
-| `workflow_id`, `dedup_fingerprint` | SHA-256 of the workflow JSON and of its normalized form |
+| `workflow_id` | SHA-256 of `source_file` |
+| `dedup_fingerprint` | SHA-256 of what the profile shows: workflow name, node types, node names and which node feeds which. Never of parameter values, so it cannot confirm a guessed value. Duplicates are found with full-content hashes that never leave the run, so two kept workflows that differ only in parameter values share a fingerprint |
 | `source_file` | Path relative to `--input`; never an absolute local path |
 | `workflow_name` | From the JSON, or the file name if it has none |
 | `primary_category`, `secondary_category` | See [Classification](#classification) |
@@ -107,13 +108,16 @@ services, patterns, architecture notes, reusable insight, metrics, classificatio
 short normalized node list.
 
 **What never reaches the output:** node parameters, credentials, URLs and sticky-note text.
-Workflows often carry API keys in parameters, so only names, types, counts and hashes are
-written. A workflow or node name that is not a string is ignored, and a node type that does not
-look like an n8n type name (an optional `@scope/`, a package name, one dot and a node name)
-counts as no type, so neither can carry other content into the output. URLs (any scheme, or
-`www.`) and e-mail addresses inside workflow, node, trigger and folder names become
-`(link removed)`: users often name a node after the address it calls, query string and key
-included. Bare host names and file paths (`source_file`) are kept.
+Workflows often carry API keys in parameters, so only names, types, counts and hashes of those
+are written. A workflow or node name that is not a string is ignored, and a node type that does
+not look like an n8n type name (an optional `@scope/` without dots, a package named
+`n8n-nodes-*`, one dot and a node name) counts as no type, so neither can carry other content
+into the output. URLs (any scheme, or
+`www.`), host names followed by a path (`bit.ly/x`) and e-mail addresses inside workflow,
+node, trigger and folder names become `(link removed)`: users often name a node after the
+address it calls, query string and key included. A host or file name alone (`Node.js`,
+`data.csv`) and the file path (`source_file`) are kept. Output files are readable by their
+owner only.
 
 **Names are untrusted text.** Control characters and line breaks become spaces. In headings and
 lists, the characters that start a link, image, HTML tag or code span (`[`, `]`, `<`, `` ` `` and

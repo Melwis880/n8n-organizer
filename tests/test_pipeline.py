@@ -2,6 +2,7 @@ import inspect
 import json
 import os
 import re
+import stat
 import sys
 import unittest
 from dataclasses import asdict
@@ -15,8 +16,9 @@ from n8n_organizer.classifier import classify_workflow
 from n8n_organizer.loader import load_workflow_json
 from n8n_organizer.main import UsageError, build_record, run
 from n8n_organizer.markdown_writer import YAML_OPTIONS, _yaml_block
-from n8n_organizer.normalizer import normalize_workflow
+from n8n_organizer.normalizer import normalize_workflow, structure_fingerprint
 from n8n_organizer.trace import Tracer
+from n8n_organizer.utils import sha256_text
 
 from helpers import AI_WF, DATA_WF, ORCH_WF, TempDirTest, node, workflow, write_json
 
@@ -381,6 +383,8 @@ class LeakTests(TempDirTest):
                 node("Mail ops@corp.example", "n8n-nodes-base.emailSend"),
                 node("ht\u200btps://hidden.example/TOKEN4", "n8n-nodes-base.set"),
                 node("Node.js v1.2 (step 3).", "n8n-nodes-base.code"),
+                node("Short bit.ly/TOKEN5", "n8n-nodes-base.set"),
+                node("Scoped", "@host.example/n8n-nodes-login.form"),
             ],
         )
         write_json(self.input / "links.json", wf)
@@ -390,11 +394,13 @@ class LeakTests(TempDirTest):
         run(self.input, self.output, tracer=tracer)
         text = self.output_text()
         everything = text + (self.output / "summary.txt").read_text() + tracer.path.read_text()
-        for leak in ("TOKEN", "evil.example", "internal.example", "hook.example", "corp.example", "hidden.example"):
+        for leak in ("TOKEN", "evil.example", "internal.example", "hook.example", "corp.example", "hidden.example", "bit.ly", "host.example"):
             self.assertNotIn(leak, everything)
         self.assertIn("# Workflow: Pay (link removed) now", text)
         self.assertIn("- Node.js v1.2 (step 3). (n8n-nodes-base.code)", text)
         self.assertIn("- Hook (link removed) (n8n-nodes-base.webhook)", text)  # trigger_nodes too: in "everything"
+        self.assertIn("- Short (link removed) (n8n-nodes-base.set)", text)
+        self.assertIn("- Scoped (Unknown)", text)
         self.assertIn("# Folder: (link removed)", text)
         # The path itself is kept exactly: it names the file, it is not workflow text.
         self.assertIn("source_file: www.folder.example/wf.json", text)
@@ -425,7 +431,7 @@ class LeakTests(TempDirTest):
 class CapTests(TempDirTest):
     def test_inventory_and_lists_are_capped_and_say_how_many_more(self):
         nodes = (
-            [node(f"T{i:02d}", f"a.b{i:02d}Trigger") for i in range(60)]
+            [node(f"T{i:02d}", f"n8n-nodes-x.b{i:02d}Trigger") for i in range(60)]
             + [node(f"S{i:02d}", f"n8n-nodes-base.svc{i:02d}") for i in range(60)]
             + [node(f"N{i:03d}", "n8n-nodes-base.set") for i in range(280)]
         )
@@ -447,7 +453,7 @@ class CapTests(TempDirTest):
         self.assertEqual(len(meta["external_services"]), 51)
 
     def test_lists_at_the_cap_get_no_marker(self):
-        wf = workflow("Fifty", [node(f"T{i:02d}", f"a.b{i:02d}Trigger") for i in range(50)])
+        wf = workflow("Fifty", [node(f"T{i:02d}", f"n8n-nodes-x.b{i:02d}Trigger") for i in range(50)])
         record = build_record(Path("w.json"), "w.json", wf)
         self.assertEqual(len(record.metadata.trigger_nodes), 50)
         self.assertNotIn("more", record.metadata.trigger_nodes[-1])
@@ -509,6 +515,90 @@ class YamlBlockTests(TempDirTest):
             for i, wf in enumerate(workflows):
                 meta = asdict(build_record(Path(f"wf{i}.json"), f"f/wf{i}.json", wf).metadata)
                 self.assertEqual(_yaml_block(meta), yaml.safe_dump(meta, **YAML_OPTIONS).strip(), wf["name"])
+
+
+class PublicIdTests(TempDirTest):
+    """workflow_id and dedup_fingerprint hold no parameter value, so nobody can confirm a guess with them."""
+
+    def chat(self, chat_id, **extra):
+        return workflow("Alert", [
+            node("Send", "n8n-nodes-base.telegram", parameters={"chatId": chat_id, "text": "hi"}, **extra),
+            node("Start", "n8n-nodes-base.manualTrigger"),
+        ], {"Start": {"main": [[{"node": "Send", "type": "main", "index": 0}]]}})
+
+    def metas(self):
+        return {m["source_file"]: m for m in front_matters(self.output_text())}
+
+    def test_ids_do_not_change_with_parameter_values(self):
+        write_json(self.input / "a.json", self.chat("184467321"))
+        write_json(self.input / "b.json", self.chat("999999999", credentials={"telegramApi": {"id": "7", "name": "Prod"}}))
+        tracer = Tracer(self.tmp / "logs")
+        result = run(self.input, self.output, tracer=tracer)
+        # Different parameters: still two workflows, found with the full hashes that never leave the run.
+        self.assertEqual((result.unique, result.duplicates_exact, result.duplicates_normalized), (2, 0, 0))
+        metas = self.metas()
+        self.assertEqual(metas["a.json"]["dedup_fingerprint"], metas["b.json"]["dedup_fingerprint"])
+        self.assertEqual(metas["a.json"]["workflow_id"], sha256_text("a.json"))
+        self.assertEqual(metas["b.json"]["workflow_id"], sha256_text("b.json"))
+        record = build_record(Path("a.json"), "a.json", self.chat("184467321"))
+        for value in (record.raw_hash, record.normalized_hash):
+            self.assertNotIn(value, self.output_text())
+            self.assertNotIn(value, tracer.path.read_text())
+        classified = [json.loads(l) for l in tracer.path.read_text().splitlines() if '"classified"' in l]
+        self.assertEqual({e["dedup_fingerprint"] for e in classified}, {metas["a.json"]["dedup_fingerprint"]})
+        self.assertNotIn("raw_hash", classified[0])
+
+    def test_fingerprint_follows_what_a_profile_shows(self):
+        base = self.chat("1")
+        renamed = self.chat("1")
+        renamed["nodes"][0]["name"] = "Notify"
+        renamed["connections"] = {"Start": {"main": [[{"node": "Notify", "type": "main", "index": 0}]]}}
+        unwired = self.chat("1")
+        unwired["connections"] = {}
+        retyped = self.chat("1")
+        retyped["nodes"][0]["type"] = "n8n-nodes-base.slack"
+        prints = {structure_fingerprint(wf) for wf in (base, renamed, unwired, retyped)}
+        self.assertEqual(len(prints), 4)
+        # A link removed from a name is not in the fingerprint either: its query string could hold a key.
+        one, two = self.chat("1"), self.chat("1")
+        one["nodes"][0]["name"] = "GET https://api.example/v1?key=K1"
+        two["nodes"][0]["name"] = "GET https://api.example/v1?key=K2"
+        self.assertEqual(structure_fingerprint(one), structure_fingerprint(two))
+
+    def test_edges_to_missing_nodes_and_odd_targets_are_left_out(self):
+        base = self.chat("1")
+        dangling = self.chat("1")
+        dangling["connections"]["Gone"] = {"main": [[{"node": "Send", "type": "main", "index": 0}]]}
+        dangling["connections"]["Start"]["main"][0] += [{"node": "Deleted"}, {"node": {"x": 1}}, {"type": "main"}]
+        self.assertEqual(structure_fingerprint(dangling), structure_fingerprint(base))
+        record = build_record(Path("d.json"), "d.json", dangling)
+        self.assertEqual(record.metadata.connection_count, 5)  # counted as edges, as before
+
+
+class LoneSurrogateTests(TempDirTest):
+    def test_half_an_emoji_is_analysed_not_an_error(self):
+        # Valid UTF-8 text; json.loads turns each escape into a lone surrogate.
+        (self.input / "name.json").write_text(
+            '{"name": "Bad \\ud800 name", "nodes": [{"name": "N\\udc00", "type": "n8n-nodes-base.set"}]}', encoding="utf-8")
+        (self.input / "param.json").write_text(
+            '{"name": "Code", "nodes": [{"name": "C", "type": "n8n-nodes-base.code", '
+            '"parameters": {"jsCode": "x = \\"\\ud83d\\""}}]}', encoding="utf-8")
+        result = run(self.input, self.output)
+        self.assertEqual((result.analysed, result.errors), (2, []))
+        text = self.output_text()
+        self.assertIn("# Workflow: Bad name", text)
+        self.assertIn("- N (n8n-nodes-base.set)", text)
+
+
+class OutputPermissionTests(TempDirTest):
+    @unittest.skipUnless(os.name == "posix", "POSIX permissions")
+    def test_output_files_are_readable_by_their_owner_only(self):
+        write_json(self.input / "a.json", DATA_WF)
+        run(self.input, self.output)
+        files = sorted(self.output.iterdir())
+        self.assertEqual([p.name for p in files], ["1-Data_Integration.md", "summary.txt"])
+        for path in files:
+            self.assertEqual(stat.S_IMODE(path.stat().st_mode) & 0o077, 0, path.name)
 
 
 if __name__ == "__main__":

@@ -16,9 +16,9 @@ from .enricher import build_metadata
 from .loader import iter_workflow_files, load_workflow_json
 from .markdown_writer import write_category_markdowns
 from .models import RunResult, WorkflowRecord
-from .normalizer import normalize_workflow
+from .normalizer import normalize_workflow, structure_fingerprint
 from .trace import Tracer
-from .utils import clean_name, clean_text, has_unsafe_chars, sha256_json, text_field, write_new_file
+from .utils import clean_name, clean_text, has_unsafe_chars, sha256_json, sha256_text, text_field, write_new_file
 
 
 class UsageError(Exception):
@@ -30,6 +30,15 @@ class OutputError(Exception):
 
 
 def check_locations(input_dir: Path, output_dir: Path) -> None:
+    try:
+        _check_locations(input_dir, output_dir)
+    except RuntimeError:  # Path.resolve on a symlink loop before Python 3.13
+        raise UsageError("symlink loop in the input or output path") from None
+    except OSError as exc:  # a folder that cannot be listed, a symlink loop
+        raise UsageError(f"cannot check the input or output folder: {exc.strerror}") from None
+
+
+def _check_locations(input_dir: Path, output_dir: Path) -> None:
     if not input_dir.is_dir():
         raise UsageError(f"input folder not found: {input_dir}")
     src = input_dir.resolve()
@@ -48,7 +57,8 @@ def build_record(path: Path, rel: str, data: dict) -> WorkflowRecord:
     metrics, score = classify_workflow(data)
     working = typed_nodes(data)
     node_types = {t for _, t in working}
-    metadata = build_metadata(rel, name, raw_hash, normalized_hash, metrics, score, node_types)
+    # The output gets ids that hold no parameter value: the path, and the hash of what a profile shows.
+    metadata = build_metadata(rel, name, sha256_text(rel), structure_fingerprint(data), metrics, score, node_types)
     # Keep only what a profile shows, so a record stays small however large the workflow is.
     nodes = [(clean_name(text_field(n.get("name"))), t) for n, t in working[:INVENTORY_MAX_NODES]]
     excerpt = typed_nodes(normalized)[:EXCERPT_MAX_NODES]
@@ -144,8 +154,8 @@ def _run(input_dir: Path, output_dir: Path, tracer: Tracer, max_words: int, max_
             secondary=record.metadata.secondary_category,
             confidence=record.score.confidence,
             scores={c.value: s for c, s in record.score.scores.items()},
-            raw_hash=record.raw_hash,
-            normalized_hash=record.normalized_hash,
+            workflow_id=record.metadata.workflow_id,
+            dedup_fingerprint=record.metadata.dedup_fingerprint,
         )
 
     result.analysed = len(records)

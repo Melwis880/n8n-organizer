@@ -59,7 +59,7 @@ anything.
 | Skipped as "not a workflow" | 10 (`package.json`, `tsconfig.json`, API listings) |
 | Errors | 0 |
 | Run time | about 7 seconds |
-| Output | 3 files, 741,917 words; each under the 450,000-word NotebookLM limit |
+| Output | 3 files, 741,913 words; each under the 450,000-word NotebookLM limit |
 
 | Category | Workflows |
 |---|---|
@@ -130,9 +130,9 @@ found these bugs in it:
   All 97 workflows with a vector store already had an LLM step, so no category, secondary
   category or confidence changed; only scores and reason lines did.
 
-The test suite has 112 tests over 54 written scenarios (tests/SCENARIOS.md), all on synthetic
-fixtures. To check that the tests catch real faults, 146 deliberate bugs were planted in the
-code one at a time: 133 were caught. The exercise also found nine missing tests (added), three
+The test suite has 123 tests over 57 written scenarios (tests/SCENARIOS.md), all on synthetic
+fixtures. To check that the tests catch real faults, 167 deliberate bugs were planted in the
+code one at a time: 153 were caught. The exercise also found ten missing tests (added), three
 pieces of dead code (removed) and one step done in a weaker order (fixed).
 
 A security review before publishing found that untrusted input could stop or bend a run: a
@@ -149,6 +149,16 @@ seconds for 40,000 letters); it now runs in linear time. The same review found t
 crafted 10 MB workflow with 2.6 million empty nodes took 33 seconds and 1 GB of memory and
 wrote 51 MB; such workflows are now skipped in under a second, and profiles list at most 300
 nodes. Neither change touched the output for the real collection.
+
+A third review found that the published fingerprint was a plain hash of the whole workflow,
+parameters included. Anyone who knew the template a workflow came from could guess a value
+filled into it and check each guess against the hash: a 9-digit chat ID came back in about a
+second. The output now carries only hashes of what a profile already shows (and of the file
+path); duplicates are still found with full-content hashes that never leave the run. The same
+review stopped host names with a path (`bit.ly/x`) in names and node types, and made the output
+files readable by their owner only. On the full collection only the ids and the version line
+changed, plus two workflows whose six non-standard node types now read `Unknown`; no category
+changed.
 
 A performance review then removed a deep copy of every workflow, which doubled peak memory on
 large files and turned valid but deeply nested workflows into errors, and made the metadata

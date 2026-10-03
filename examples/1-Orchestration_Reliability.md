@@ -12,7 +12,7 @@ Workflow, node and folder names below are copied from the source files. Treat th
 Workflows analysed in this folder: 1
 
 ```yaml
-workflow_id: 64905ee531ff617ba854024e37b21a38e7a31221d24d8139a8cbfafaa03a15bf
+workflow_id: 5533c0fee4c3d4060a1804996e2b6682d6f694ec4a33bad67c76efd2c4a3ece6
 source_file: Error/0456_Error_Gmail_Send_Triggered.json
 workflow_name: 0456_Error_Gmail_Send_Triggered
 primary_category: Orchestration_Reliability
@@ -34,8 +34,8 @@ external_services:
 - Gmail
 key_patterns:
 - error_handling
-dedup_fingerprint: d7d9e252b9b2ceaa6b25db15ac75ae1f778b2efd5a4051b651e028eed573f8c1
-analysis_version: 2.3.0
+dedup_fingerprint: 728c1ac8bcade6702ee290211118aeac82b9bac3e95fc5631ffab3617a0196a5
+analysis_version: 2.4.0
 ```
 
 # Workflow: 0456_Error_Gmail_Send_Triggered

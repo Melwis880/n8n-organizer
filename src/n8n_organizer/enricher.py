@@ -56,8 +56,8 @@ def capped(items: list[str], clean=lambda item: item) -> list[str]:
 def build_metadata(
     source_file: str,
     workflow_name: str,
-    raw_hash: str,
-    normalized_hash: str,
+    workflow_id: str,
+    fingerprint: str,
     metrics: WorkflowMetrics,
     score: WorkflowScore,
     node_types: set[str],
@@ -66,7 +66,7 @@ def build_metadata(
     secondary = score.secondary_category.value if score.secondary_category else None
 
     return WorkflowMetadata(
-        workflow_id=raw_hash,
+        workflow_id=workflow_id,
         source_file=source_file,
         workflow_name=workflow_name,
         primary_category=primary,
@@ -82,6 +82,6 @@ def build_metadata(
         trigger_nodes=capped(metrics.trigger_nodes, clean_name),
         external_services=capped(metrics.external_services),
         key_patterns=score.key_patterns,
-        dedup_fingerprint=normalized_hash,
+        dedup_fingerprint=fingerprint,
         analysis_version=ANALYSIS_VERSION,
     )

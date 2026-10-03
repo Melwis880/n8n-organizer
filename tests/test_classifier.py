@@ -134,7 +134,7 @@ class TypePatternTests(unittest.TestCase):
         for type_ in (
             "n8n-nodes-base.googleSheets",
             "@n8n/n8n-nodes-langchain.agent",
-            "@horka.tv/n8n-nodes-storage-kv.keyValueStorage",
+            "@horka/n8n-nodes-storage-kv.keyValueStorage",
             "n8n-nodes-community_x.node_1",
         ):
             self.assertEqual(type_of({"type": type_}), type_)
@@ -150,6 +150,13 @@ class TypePatternTests(unittest.TestCase):
             "n8n-nodes-base",
             "n8n-nodes-base.",
             "@scope/.x",
+            # A package must be named n8n-nodes-*, and a scope has no dot: a host name with a
+            # path would reach the output (n8n loads community nodes only from such packages).
+            "@horka.tv/n8n-nodes-storage-kv.keyValueStorage",
+            "@evil.example/n8n-nodes-login.x",
+            "bit.ly",
+            "evil.example",
+            "CUSTOM.klicktipp",
             "n8n-nodes-base." + "x" * 106,
         ):
             self.assertEqual(type_of({"type": type_}), "", type_)

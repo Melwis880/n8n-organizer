@@ -77,6 +77,25 @@ class LocationTests(TempDirTest):
         self.assertIn("remove them before the next run", err)
         self.assertNotIn("Traceback", err)
 
+    def test_output_path_in_a_symlink_loop_is_refused_without_a_traceback(self):
+        (self.tmp / "loop1").symlink_to(self.tmp / "loop2")
+        (self.tmp / "loop2").symlink_to(self.tmp / "loop1")
+        code, err = self.run_cli("--input", str(self.input), "--output", str(self.tmp / "loop1" / "out"))
+        self.assertEqual(code, 2)
+        self.assertNotIn("Traceback", err)
+
+    @unittest.skipIf(hasattr(os, "geteuid") and os.geteuid() == 0, "root ignores permissions")
+    def test_output_folder_that_cannot_be_listed_is_refused_without_a_traceback(self):
+        self.output.mkdir()
+        self.output.chmod(0o000)
+        try:
+            code, err = self.run_cli("--input", str(self.input), "--output", str(self.output))
+        finally:
+            self.output.chmod(0o755)
+        self.assertEqual(code, 2)
+        self.assertIn("cannot check the input or output folder: Permission denied", err)
+        self.assertNotIn("Traceback", err)
+
     def test_non_empty_output_is_refused(self):
         self.output.mkdir()
         (self.output / "keep.md").write_text("mine")

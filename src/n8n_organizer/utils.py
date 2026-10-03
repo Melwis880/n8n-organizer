@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import unicodedata
 from pathlib import Path
@@ -15,16 +16,20 @@ UNSAFE_CATEGORIES = ("Cc", "Cf", "Zl", "Zp", "Cs")
 # Characters that can start a link, image, HTML tag, comment or code span in Markdown.
 _MD_SPECIAL = re.compile(r"([\\`<\[\]])")
 
-# URLs (any scheme, or www.) and e-mail addresses inside a name. n8n users often name a node
+# URLs (any scheme, or www.), host names followed by a path (bit.ly/x, evil.example/login) and
+# e-mail addresses inside a name. A host name alone (Node.js, data.csv) is kept: it reads like a
+# file name, and no Markdown viewer links it without a path. n8n users often name a node
 # "GET https://host/path?key=...", and Markdown viewers turn such text into a clickable link.
 # Punctuation that ends a sentence or closes a bracket stays: "Fetch (https://x.example)."
 # No word boundary in front: a viewer also links "a_www.x.example" and "a_https://x.example".
 # Linear time on raw names, which can be millions of characters long: tried from every position
 # of a long run, an unbounded scheme or mailbox took quadratic time (40,000 letters: 31 s). A
-# scheme is at most 32 characters, and a mailbox starts only where a run of its characters starts.
+# scheme is at most 32 characters; a mailbox or a host name starts only where a run of its
+# characters starts, and the dots that split a host name leave one way to match it.
 _LINKISH = re.compile(
     r"""(?i)(?:[a-z][a-z0-9+.-]{0,31}://|www\.)\S*[^\s.,;:!?)\]}'">]"""
     r"""|(?<![\w.+-])[\w.+-]+@[\w-]+\.[\w.-]*\w"""
+    r"""|(?<![\w.-])[\w-]+(?:\.[\w-]+)*\.[a-z]{2,63}/(?:\S*[^\s.,;:!?)\]}'">])?"""
 )
 LINK_PLACEHOLDER = "(link removed)"
 
@@ -34,7 +39,9 @@ NAME_SCAN_MAX = 4096
 
 
 def sha256_text(text: str) -> str:
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+    # surrogatepass: json.loads accepts a lone "\ud83d" (half an emoji), which strict UTF-8 cannot
+    # encode; the workflow was dropped as an error. Every other text encodes to the same bytes.
+    return hashlib.sha256(text.encode("utf-8", "surrogatepass")).hexdigest()
 
 
 def sha256_json(data: Any) -> str:
@@ -64,7 +71,11 @@ def clean_name(value: Any, max_len: int = 200) -> str:
     """A name for the output and the trace: URLs and e-mail addresses removed, then clean_text.
     Removed first: a zero-width or control character inside a URL is part of it, and cleaning
     would turn it into a space that cuts the URL in two and leaves its tail behind."""
-    return clean_text(_LINKISH.sub(LINK_PLACEHOLDER, text_field(value)[:NAME_SCAN_MAX]), max_len)
+    text = text_field(value)[:NAME_SCAN_MAX]
+    # Every link holds "/" (a scheme or a path), "@" or "www."; most names hold none of them.
+    if "/" in text or "@" in text or "www." in text.lower():
+        text = _LINKISH.sub(LINK_PLACEHOLDER, text)
+    return clean_text(text, max_len)
 
 
 def has_unsafe_chars(text: str) -> bool:
@@ -83,6 +94,8 @@ def md_text(value: Any, max_len: int = 200) -> str:
 
 def write_new_file(path: Path, text: str) -> None:
     """Create path and write text. Fails if anything is already there, a symlink included, so the
-    tool never follows a link or overwrites a file, even one that appeared during the run."""
-    with path.open("x", encoding="utf-8") as f:
+    tool never follows a link or overwrites a file, even one that appeared during the run. The
+    file is readable by its owner only, like the trace: both hold workflow and file names."""
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0)
+    with os.fdopen(os.open(path, flags, 0o600), "w", encoding="utf-8") as f:
         f.write(text)
