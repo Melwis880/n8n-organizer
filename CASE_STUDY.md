@@ -130,9 +130,9 @@ found these bugs in it:
   All 97 workflows with a vector store already had an LLM step, so no category, secondary
   category or confidence changed; only scores and reason lines did.
 
-The test suite has 105 tests over 51 written scenarios (tests/SCENARIOS.md), all on synthetic
-fixtures. To check that the tests catch real faults, 129 deliberate bugs were planted in the
-code one at a time: 116 were caught. The exercise also found nine missing tests (added), three
+The test suite has 106 tests over 51 written scenarios (tests/SCENARIOS.md), all on synthetic
+fixtures. To check that the tests catch real faults, 133 deliberate bugs were planted in the
+code one at a time: 120 were caught. The exercise also found nine missing tests (added), three
 pieces of dead code (removed) and one step done in a weaker order (fixed).
 
 A security review before publishing found that untrusted input could stop or bend a run: a
@@ -143,7 +143,9 @@ confidence, tag or service changed. A second review found that a symlink planted
 trace file name made the tool append to any file the user can write, that URLs and e-mail
 addresses in node names (often "GET https://host/path?key=...") reached the output as
 clickable links, and that a folder that could not be listed was dropped without a word. These
-are fixed too; the full-collection output changed only in its version line.
+are fixed too; the full-collection output changed only in its version line. A last review
+before publishing caught the new link filter taking quadratic time on a very long name (31
+seconds for 40,000 letters); it now runs in linear time.
 
 A performance review then removed a deep copy of every workflow, which doubled peak memory on
 large files and turned valid but deeply nested workflows into errors, and made the metadata

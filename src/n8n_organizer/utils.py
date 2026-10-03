@@ -19,7 +19,13 @@ _MD_SPECIAL = re.compile(r"([\\`<\[\]])")
 # "GET https://host/path?key=...", and Markdown viewers turn such text into a clickable link.
 # Punctuation that ends a sentence or closes a bracket stays: "Fetch (https://x.example)."
 # No word boundary in front: a viewer also links "a_www.x.example" and "a_https://x.example".
-_LINKISH = re.compile(r"""(?i)(?:[a-z][a-z0-9+.-]*://|www\.)\S*[^\s.,;:!?)\]}'">]|[\w.+-]+@[\w-]+\.[\w.-]*\w""")
+# Linear time on raw names, which can be millions of characters long: tried from every position
+# of a long run, an unbounded scheme or mailbox took quadratic time (40,000 letters: 31 s). A
+# scheme is at most 32 characters, and a mailbox starts only where a run of its characters starts.
+_LINKISH = re.compile(
+    r"""(?i)(?:[a-z][a-z0-9+.-]{0,31}://|www\.)\S*[^\s.,;:!?)\]}'">]"""
+    r"""|(?<![\w.+-])[\w.+-]+@[\w-]+\.[\w.-]*\w"""
+)
 LINK_PLACEHOLDER = "(link removed)"
 
 

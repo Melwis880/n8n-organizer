@@ -1,6 +1,7 @@
 import unittest
 
 import tempfile
+import time
 from pathlib import Path
 
 from n8n_organizer.utils import clean_name, clean_text, md_text, write_new_file
@@ -40,6 +41,8 @@ class CleanNameTests(unittest.TestCase):
         self.assertEqual(clean_name("ftp://h/x and s3://bucket/key"), "(link removed) and (link removed)")
         self.assertEqual(clean_name("mail ops+alerts@corp.example."), "mail (link removed).")
         self.assertEqual(clean_name("a_www.x.example b_https://y.example"), "a_(link removed) b_(link removed)")
+        self.assertEqual(clean_name("1https://x.example 2-ftp://y.example"), "1(link removed) 2-(link removed)")
+        self.assertEqual(clean_name("x" * 40 + "https://z.example"), "x" * 13 + "(link removed)")  # scheme: 32 at most
 
     def test_closing_punctuation_stays(self):
         self.assertEqual(clean_name("Fetch (https://x.example/a)."), "Fetch ((link removed)).")
@@ -54,6 +57,14 @@ class CleanNameTests(unittest.TestCase):
     def test_ordinary_names_are_kept(self):
         for name in ("Node.js v1.2 (step 3).", "Q&A: a > b", "@n8n/n8n-nodes-langchain.agent", "Café 📄", "x@y", "e-mail me"):
             self.assertEqual(clean_name(name), name)
+
+    def test_long_names_take_linear_time(self):
+        # A raw name can be millions of characters long. Tried from every position of a long run,
+        # the pattern took quadratic time: 40,000 letters took 31 s, 200,000 would take minutes.
+        start = time.perf_counter()
+        for name in ("a" * 200_000, "a." * 100_000, "ab+." * 50_000, ("b" * 50 + "@") * 4_000, "www." + "." * 200_000):
+            clean_name(name)
+        self.assertLess(time.perf_counter() - start, 5)
 
     def test_truncated_after_removal(self):
         self.assertEqual(len(clean_name("https://x.example/" + "a" * 50 + " " + "b" * 300)), 200)
