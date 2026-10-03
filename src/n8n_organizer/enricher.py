@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from .classifier import is_openai
-from .config import ANALYSIS_VERSION, CLIENT_PROBLEM_MAP
+from .config import ANALYSIS_VERSION, CLIENT_PROBLEM_MAP, LIST_MAX_ITEMS
 from .models import Category, WorkflowMetadata, WorkflowMetrics, WorkflowScore
 from .utils import clean_name
 
@@ -46,6 +46,13 @@ def infer_freelance_value(primary_category: str) -> str:
     return "Useful for clients who need webhook integrations, fault tolerance, process orchestration or operational resilience."
 
 
+def capped(items: list[str], clean=lambda item: item) -> list[str]:
+    """The first LIST_MAX_ITEMS items, cleaned, and one closing "... N more" item for the rest."""
+    shown = [clean(item) for item in items[:LIST_MAX_ITEMS]]
+    extra = len(items) - LIST_MAX_ITEMS
+    return shown + [f"... {extra} more"] if extra > 0 else shown
+
+
 def build_metadata(
     source_file: str,
     workflow_name: str,
@@ -72,8 +79,8 @@ def build_metadata(
         node_count=metrics.node_count,
         connection_count=metrics.connection_count,
         branching_factor=metrics.branch_count,
-        trigger_nodes=[clean_name(t) for t in metrics.trigger_nodes],
-        external_services=metrics.external_services,
+        trigger_nodes=capped(metrics.trigger_nodes, clean_name),
+        external_services=capped(metrics.external_services),
         key_patterns=score.key_patterns,
         dedup_fingerprint=normalized_hash,
         analysis_version=ANALYSIS_VERSION,

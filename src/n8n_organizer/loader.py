@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Iterator
 
-from .config import MAX_FILE_BYTES
+from .config import MAX_FILE_BYTES, MAX_NODES
 
 
 @dataclass
@@ -55,7 +55,7 @@ def is_workflow(data: Any) -> bool:
     return isinstance(nodes, list) and all(isinstance(n, dict) for n in nodes)
 
 
-def load_workflow_json(path: Path, max_bytes: int = MAX_FILE_BYTES) -> LoadResult:
+def load_workflow_json(path: Path, max_bytes: int = MAX_FILE_BYTES, max_nodes: int = MAX_NODES) -> LoadResult:
     mode = path.lstat().st_mode
     if stat.S_ISLNK(mode):
         return LoadResult(None, "symlink")
@@ -89,6 +89,8 @@ def load_workflow_json(path: Path, max_bytes: int = MAX_FILE_BYTES) -> LoadResul
         data = json.loads(text)
     except (json.JSONDecodeError, RecursionError):
         return LoadResult(None, "invalid_json")
+    if isinstance(data, dict) and isinstance(data.get("nodes"), list) and len(data["nodes"]) > max_nodes:
+        return LoadResult(None, "too_many_nodes")
     if not is_workflow(data):
         return LoadResult(None, "not_a_workflow")
     return LoadResult(data)

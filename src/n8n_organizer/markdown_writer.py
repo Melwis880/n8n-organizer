@@ -38,7 +38,11 @@ def _yaml_block(metadata: dict) -> str:
 def _format_node_inventory(record: WorkflowRecord) -> str:
     if not record.nodes:
         return "- No nodes found"
-    return "\n".join(f"- {md_text(name) or 'Unnamed'} ({md_text(type_) or 'Unknown'})" for name, type_ in record.nodes)
+    lines = [f"- {md_text(name) or 'Unnamed'} ({md_text(type_) or 'Unknown'})" for name, type_ in record.nodes]
+    extra = record.metadata.node_count - len(record.nodes)
+    if extra > 0:
+        lines.append(f"- ... {extra} more nodes not listed")
+    return "\n".join(lines)
 
 
 def _bullets(items: list[str], empty: str) -> str:

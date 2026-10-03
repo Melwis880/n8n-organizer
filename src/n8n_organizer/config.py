@@ -8,9 +8,18 @@ MAX_WORDS_PER_FILE = 450_000
 
 MAX_FILE_BYTES = 10 * 1024 * 1024
 
+# A workflow with more nodes is skipped: 10 MB of empty nodes is 2.6 million of them, ~20 s and
+# ~0.8 GB to analyse. The largest real workflow has 174 nodes; the n8n editor is far below this.
+MAX_NODES = 10_000
+
 # How much of a workflow each profile shows; records keep no more than this.
 EXCERPT_MAX_NODES = 15
 REASONS_SHOWN = 20
+# A profile lists at most this many nodes, triggers and services, each list closed by a "... N more"
+# line, so output and memory stay small up to MAX_NODES. The largest real workflow has 174 nodes,
+# 14 triggers and 22 services.
+INVENTORY_MAX_NODES = 300
+LIST_MAX_ITEMS = 50
 
 STICKY_NOTE_TYPE = "n8n-nodes-base.stickyNote"
 

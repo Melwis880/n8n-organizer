@@ -130,9 +130,9 @@ found these bugs in it:
   All 97 workflows with a vector store already had an LLM step, so no category, secondary
   category or confidence changed; only scores and reason lines did.
 
-The test suite has 106 tests over 51 written scenarios (tests/SCENARIOS.md), all on synthetic
-fixtures. To check that the tests catch real faults, 133 deliberate bugs were planted in the
-code one at a time: 120 were caught. The exercise also found nine missing tests (added), three
+The test suite has 112 tests over 54 written scenarios (tests/SCENARIOS.md), all on synthetic
+fixtures. To check that the tests catch real faults, 146 deliberate bugs were planted in the
+code one at a time: 133 were caught. The exercise also found nine missing tests (added), three
 pieces of dead code (removed) and one step done in a weaker order (fixed).
 
 A security review before publishing found that untrusted input could stop or bend a run: a
@@ -145,7 +145,10 @@ addresses in node names (often "GET https://host/path?key=...") reached the outp
 clickable links, and that a folder that could not be listed was dropped without a word. These
 are fixed too; the full-collection output changed only in its version line. A last review
 before publishing caught the new link filter taking quadratic time on a very long name (31
-seconds for 40,000 letters); it now runs in linear time.
+seconds for 40,000 letters); it now runs in linear time. The same review found that one
+crafted 10 MB workflow with 2.6 million empty nodes took 33 seconds and 1 GB of memory and
+wrote 51 MB; such workflows are now skipped in under a second, and profiles list at most 300
+nodes. Neither change touched the output for the real collection.
 
 A performance review then removed a deep copy of every workflow, which doubled peak memory on
 large files and turned valid but deeply nested workflows into errors, and made the metadata

@@ -66,6 +66,12 @@ class CleanNameTests(unittest.TestCase):
             clean_name(name)
         self.assertLess(time.perf_counter() - start, 5)
 
+    def test_only_the_start_of_a_huge_name_is_scanned(self):
+        start = time.perf_counter()
+        self.assertEqual(clean_name("a" * 10_000_000), "a" * 197 + "...")
+        self.assertLess(time.perf_counter() - start, 1)
+        self.assertEqual(clean_name("https://x.example/" + "a" * 10_000), "(link removed)")
+
     def test_truncated_after_removal(self):
         self.assertEqual(len(clean_name("https://x.example/" + "a" * 50 + " " + "b" * 300)), 200)
 

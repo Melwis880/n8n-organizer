@@ -3,7 +3,14 @@ from __future__ import annotations
 from pathlib import Path
 
 from .classifier import classify_workflow, typed_nodes
-from .config import EXCERPT_MAX_NODES, MAX_FILE_BYTES, MAX_WORDS_PER_FILE, REASONS_SHOWN
+from .config import (
+    EXCERPT_MAX_NODES,
+    INVENTORY_MAX_NODES,
+    LIST_MAX_ITEMS,
+    MAX_FILE_BYTES,
+    MAX_WORDS_PER_FILE,
+    REASONS_SHOWN,
+)
 from .deduper import deduplicate_records
 from .enricher import build_metadata
 from .loader import iter_workflow_files, load_workflow_json
@@ -16,6 +23,10 @@ from .utils import clean_name, clean_text, has_unsafe_chars, sha256_json, text_f
 
 class UsageError(Exception):
     """Bad input or output location; reported to the user without a traceback."""
+
+
+class OutputError(Exception):
+    """Writing the output failed part way (disk full, permissions); reported without a traceback."""
 
 
 def check_locations(input_dir: Path, output_dir: Path) -> None:
@@ -38,11 +49,13 @@ def build_record(path: Path, rel: str, data: dict) -> WorkflowRecord:
     working = typed_nodes(data)
     node_types = {t for _, t in working}
     metadata = build_metadata(rel, name, raw_hash, normalized_hash, metrics, score, node_types)
-    nodes = [(clean_name(text_field(n.get("name"))), t) for n, t in working]
     # Keep only what a profile shows, so a record stays small however large the workflow is.
+    nodes = [(clean_name(text_field(n.get("name"))), t) for n, t in working[:INVENTORY_MAX_NODES]]
     excerpt = typed_nodes(normalized)[:EXCERPT_MAX_NODES]
     excerpt_nodes = [(clean_name(text_field(n.get("name"))), t) for n, t in excerpt]
     score.reasons = score.reasons[:REASONS_SHOWN]
+    metrics.trigger_nodes = metrics.trigger_nodes[:LIST_MAX_ITEMS]
+    metrics.external_services = metrics.external_services[:LIST_MAX_ITEMS]
     return WorkflowRecord(rel, nodes, excerpt_nodes, raw_hash, normalized_hash, metrics, score, metadata)
 
 
@@ -80,6 +93,11 @@ def run(
 
 def _run(input_dir: Path, output_dir: Path, tracer: Tracer, max_words: int, max_file_bytes: int) -> RunResult:
     check_locations(input_dir, output_dir)
+    # Created before the analysis, so a folder that cannot be made fails at once, not minutes later.
+    try:
+        output_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise UsageError(f"cannot create output folder {output_dir}: {exc.strerror}") from None
     # Folder names only: the trace never holds a local absolute path.
     tracer.event("run_start", input=input_dir.resolve().name, output=output_dir.resolve().name)
 
@@ -151,6 +169,11 @@ def _run(input_dir: Path, output_dir: Path, tracer: Tracer, max_words: int, max_
     except FileExistsError as exc:
         name = Path(exc.filename).name
         raise UsageError(f"output file appeared during the run and was not overwritten: {name}") from None
+    except OSError as exc:
+        raise OutputError(
+            f"cannot write output ({exc.strerror}); files written so far stay in {output_dir}, "
+            "remove them before the next run"
+        ) from None
     tracer.event(
         "run_end",
         files_found=result.files_found,

@@ -1,6 +1,9 @@
+import errno
 import io
+import os
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
+from unittest import mock
 
 from n8n_organizer.cli import main
 
@@ -49,6 +52,30 @@ class LocationTests(TempDirTest):
         code, err = self.run_cli("--input", str(self.input), "--output", str(self.input / "out"))
         self.assertEqual(code, 2)
         self.assertFalse((self.input / "out").exists())
+
+    @unittest.skipIf(hasattr(os, "geteuid") and os.geteuid() == 0, "root ignores permissions")
+    def test_output_folder_that_cannot_be_created_fails_before_the_analysis(self):
+        locked = self.tmp / "locked"
+        locked.mkdir()
+        locked.chmod(0o555)
+        try:
+            with mock.patch("n8n_organizer.main.build_record", side_effect=AssertionError("analysed")):
+                code, err = self.run_cli("--input", str(self.input), "--output", str(locked / "out"))
+        finally:
+            locked.chmod(0o755)
+        self.assertEqual(code, 2)
+        self.assertIn("cannot create output folder", err)
+        self.assertIn("Permission denied", err)
+        self.assertNotIn("Traceback", err)
+
+    def test_write_failure_is_reported_without_a_traceback(self):
+        full = OSError(errno.ENOSPC, "No space left on device")
+        with mock.patch("n8n_organizer.markdown_writer.write_new_file", side_effect=full):
+            code, err = self.run_cli("--input", str(self.input), "--output", str(self.output))
+        self.assertEqual(code, 1)
+        self.assertIn("cannot write output (No space left on device)", err)
+        self.assertIn("remove them before the next run", err)
+        self.assertNotIn("Traceback", err)
 
     def test_non_empty_output_is_refused(self):
         self.output.mkdir()

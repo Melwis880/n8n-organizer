@@ -51,8 +51,9 @@ n8n-organizer build --input path/to/workflows --output path/to/new-folder
 | `--log-dir DIR` | Folder for the JSONL trace (default `./logs`). |
 | `--debug` | Also print every trace line to stderr. |
 
-Exit code is `0` on success and `2` on a usage problem (missing input, output folder not empty
-or inside the input folder). A file that cannot be read never stops the run; it is counted and
+Exit code is `0` on success, `2` on a usage problem (missing input, output folder not empty,
+inside the input folder or not creatable; checked before any file is read) and `1` if writing
+the output fails part way (for example a full disk), with a message saying which files to remove. A file that cannot be read never stops the run; it is counted and
 listed in `summary.txt`.
 
 `n8n-organizer search` is reserved for a planned search index and is not built yet. It exits
@@ -94,13 +95,14 @@ as text, links and HTML included:
 | `primary_category`, `secondary_category` | See [Classification](#classification) |
 | `category_confidence` | `high`, `medium`, `low` or `none` |
 | `node_count`, `connection_count`, `branching_factor` | Sticky notes excluded; connections are real edges of every type (`main`, `ai_*`) |
-| `trigger_nodes` | Names of trigger nodes (any type ending in `Trigger`, plus Webhook) |
-| `external_services` | Every service the workflow talks to, by name (Gmail, Google Drive, HubSpot...) |
+| `trigger_nodes` | Names of trigger nodes (any type ending in `Trigger`, plus Webhook); at most 50, then one `... N more` item |
+| `external_services` | Every service the workflow talks to, by name (Gmail, Google Drive, HubSpot...); at most 50, then one `... N more` item |
 | `key_patterns` | `ai_generation` (a node calls a model), `agentic_ai` (an agent node), `rag_or_vector_memory`, `api_ingestion`, `reporting_pipeline`, `webhook_request_lifecycle`, `error_handling` |
 | `project_purpose`, `freelance_value`, `client_problem_type` | Short category-level text for scoping work |
 | `architectural_complexity` | `Low`, `Medium` or `High`, from nodes, branches, services, sub-workflows, error handling, AI |
 
-After the metadata come ten sections: summary, value, node inventory (name and type),
+After the metadata come ten sections: summary, value, node inventory (name and type; at most
+300 nodes, then a `... N more nodes not listed` line),
 services, patterns, architecture notes, reusable insight, metrics, classification reasons and a
 short normalized node list.
 
@@ -188,6 +190,7 @@ All weights live in [`src/n8n_organizer/config.py`](src/n8n_organizer/config.py)
 - Files are processed in sorted path order, so runs are reproducible.
 - Skipped, with the reason in the trace and `summary.txt`: symlinks (never followed, even if a
   file is swapped for one during the run), special files such as FIFOs, files over 10 MB,
+  workflows with more than 10,000 nodes,
   file or folder names with bytes that are not UTF-8, line breaks or control characters, files
   that are not valid UTF-8 (a BOM is fine), invalid JSON, and JSON that is not a workflow (no
   top-level object with a `nodes` list, such as `package.json`).
@@ -221,8 +224,11 @@ All weights live in [`src/n8n_organizer/config.py`](src/n8n_organizer/config.py)
 - **Prose fields are per category, not per workflow.** Summary, value and client problems are
   fixed texts for the category.
 - Word counts for splitting are approximate.
-- **No cap on the number of files.** Each file is limited to 10 MB, but a folder with millions
-  of workflows makes the output, and memory for the node lists, grow with it.
+- **No cap on the number of files.** Each file is limited to 10 MB and 10,000 nodes, and a
+  profile keeps at most 300 nodes, so each workflow costs a few kilobytes of memory and output;
+  a folder with millions of workflows still makes both grow with it. The largest real workflow
+  in the collection has 174 nodes.
+- Names longer than 200 characters are cut; only their first 4,096 characters are examined.
 - On Python 3.10, use 3.10.7 or newer: older releases parse a huge integer in JSON in quadratic
   time, so one 10 MB number can stall a run.
 

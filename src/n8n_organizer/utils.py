@@ -28,6 +28,10 @@ _LINKISH = re.compile(
 )
 LINK_PLACEHOLDER = "(link removed)"
 
+# Only the start of a name is ever shown (200 characters), so a name of millions of characters is
+# not scanned whole; the margin leaves room for spaces and control characters that cleaning drops.
+NAME_SCAN_MAX = 4096
+
 
 def sha256_text(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
@@ -60,7 +64,7 @@ def clean_name(value: Any, max_len: int = 200) -> str:
     """A name for the output and the trace: URLs and e-mail addresses removed, then clean_text.
     Removed first: a zero-width or control character inside a URL is part of it, and cleaning
     would turn it into a space that cuts the URL in two and leaves its tail behind."""
-    return clean_text(_LINKISH.sub(LINK_PLACEHOLDER, text_field(value)), max_len)
+    return clean_text(_LINKISH.sub(LINK_PLACEHOLDER, text_field(value)[:NAME_SCAN_MAX]), max_len)
 
 
 def has_unsafe_chars(text: str) -> bool:

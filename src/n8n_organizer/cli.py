@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 from . import __version__
-from .main import UsageError, run
+from .main import OutputError, UsageError, run
 from .trace import Tracer
 
 
@@ -50,4 +50,7 @@ def main(argv: list[str] | None = None) -> int:
     except NotImplementedError as exc:
         print(f"n8n-organizer: {exc}", file=sys.stderr)
         return 2
+    except OutputError as exc:
+        print(f"n8n-organizer: {exc}", file=sys.stderr)
+        return 1
     return 0

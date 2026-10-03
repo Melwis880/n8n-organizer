@@ -140,6 +140,13 @@ class SkipTests(TempDirTest):
         self.assertEqual(result.skipped, {"not_regular_file": 1})
         self.assertEqual(result.analysed, 1)
 
+    def test_workflow_with_too_many_nodes_is_skipped(self):
+        (self.input / "huge.json").write_text('{"name": "Huge", "nodes": [' + ", ".join(["{}"] * 10_001) + "]}")
+        write_json(self.input / "max.json", workflow("Max", [node(f"N{i}", "n8n-nodes-base.set") for i in range(10_000)]))
+        result = run(self.input, self.output)
+        self.assertEqual(result.skipped, {"too_many_nodes": 1})
+        self.assertEqual((result.analysed, result.errors), (1, []))
+
     @unittest.skipUnless(hasattr(os, "mkfifo"), "no FIFOs")
     def test_special_file_is_never_opened(self):
         fifo = self.input / "pipe.json"
@@ -413,6 +420,37 @@ class LeakTests(TempDirTest):
         text = self.output_text()
         self.assertEqual(text.count("(n8n-nodes-base.httpRequest)"), 30)  # node inventory: all nodes
         self.assertEqual(text.count('"type": "n8n-nodes-base.httpRequest"'), 15)  # excerpt
+
+
+class CapTests(TempDirTest):
+    def test_inventory_and_lists_are_capped_and_say_how_many_more(self):
+        nodes = (
+            [node(f"T{i:02d}", f"a.b{i:02d}Trigger") for i in range(60)]
+            + [node(f"S{i:02d}", f"n8n-nodes-base.svc{i:02d}") for i in range(60)]
+            + [node(f"N{i:03d}", "n8n-nodes-base.set") for i in range(280)]
+        )
+        wf = workflow("Wide", nodes)
+        record = build_record(Path("w.json"), "w.json", wf)
+        self.assertEqual(len(record.nodes), 300)
+        self.assertEqual((len(record.metrics.trigger_nodes), len(record.metrics.external_services)), (50, 50))
+        self.assertEqual(record.metadata.node_count, 400)
+        self.assertEqual(len(record.metadata.trigger_nodes), 51)
+        self.assertEqual(record.metadata.trigger_nodes[-1], "... 10 more")
+        self.assertEqual(record.metadata.external_services[-1], "... 10 more")
+        write_json(self.input / "w.json", wf)
+        run(self.input, self.output)
+        text = self.output_text()
+        self.assertIn("- N179 (n8n-nodes-base.set)\n- ... 100 more nodes not listed\n", text)  # 60 + 60 + 180 = 300
+        self.assertNotIn("N180", text)
+        meta = list(front_matters(text))[0]
+        self.assertEqual(meta["trigger_nodes"][-1], "... 10 more")
+        self.assertEqual(len(meta["external_services"]), 51)
+
+    def test_lists_at_the_cap_get_no_marker(self):
+        wf = workflow("Fifty", [node(f"T{i:02d}", f"a.b{i:02d}Trigger") for i in range(50)])
+        record = build_record(Path("w.json"), "w.json", wf)
+        self.assertEqual(len(record.metadata.trigger_nodes), 50)
+        self.assertNotIn("more", record.metadata.trigger_nodes[-1])
 
 
 class DeterminismTests(TempDirTest):
